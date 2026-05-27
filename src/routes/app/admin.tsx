@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth, isStaff, isCeo, isCooOrAbove, type AppRole } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
@@ -9,17 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Check, X, Crown, Loader2 } from "lucide-react";
+import { Check, X, Crown, Loader2, ShieldOff } from "lucide-react";
 
 export const Route = createFileRoute("/app/admin")({
   head: () => ({ meta: [{ title: "Painel Staff — PANELA" }] }),
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) throw redirect({ to: "/auth/login" });
-    const { data: r } = await supabase.from("user_roles").select("role").eq("user_id", data.session.user.id);
-    const has = (r ?? []).some((x: any) => ["admin","coo","ceo"].includes(x.role));
-    if (!has) throw redirect({ to: "/app" });
-  },
   component: AdminPanel,
 });
 
@@ -27,9 +20,10 @@ type SubRow = { id: string; user_id: string; plan: string; status: string; conta
 type ProfileRow = { id: string; username: string; display_name: string | null; current_plan: string; created_at: string };
 
 function AdminPanel() {
-  const { roles } = useAuth();
+  const { roles, ready } = useAuth();
   const canApprove = isCooOrAbove(roles);
   const canGrantRoles = isCeo(roles);
+  const allowed = isStaff(roles);
 
   const [subs, setSubs] = useState<SubRow[]>([]);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
@@ -37,14 +31,12 @@ function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [granting, setGranting] = useState<string | null>(null);
 
-  useEffect(() => { reload(); }, []);
   async function reload() {
     setLoading(true);
     const [{ data: s }, { data: p }] = await Promise.all([
       supabase.from("subscriptions").select("*").order("created_at", { ascending: false }).limit(100),
       supabase.from("profiles").select("id,username,display_name,current_plan,created_at").order("created_at", { ascending: false }).limit(100),
     ]);
-    // join profile data manually
     const subRows = (s ?? []) as SubRow[];
     if (subRows.length) {
       const ids = Array.from(new Set(subRows.map((x) => x.user_id)));
@@ -56,16 +48,15 @@ function AdminPanel() {
     setProfiles((p ?? []) as ProfileRow[]);
     setLoading(false);
   }
+  useEffect(() => { if (allowed) reload(); }, [allowed]);
 
   async function setSubStatus(id: string, status: "active" | "rejected" | "canceled") {
     const update: any = { status, reviewed_at: new Date().toISOString() };
     if (status === "active") { update.starts_at = new Date().toISOString(); update.ends_at = new Date(Date.now() + 31 * 24 * 3600 * 1000).toISOString(); }
     const { error } = await supabase.from("subscriptions").update(update).eq("id", id);
     if (error) return toast.error(error.message);
-    toast.success("Atualizado");
-    reload();
+    toast.success("Atualizado"); reload();
   }
-
   async function grantRole(userId: string, role: AppRole) {
     setGranting(userId);
     const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
@@ -79,10 +70,19 @@ function AdminPanel() {
     toast.success("Cargo removido");
   }
 
+  if (!ready) return null;
+  if (!allowed) return (
+    <div className="max-w-md mx-auto p-10 text-center space-y-3">
+      <ShieldOff className="h-10 w-10 mx-auto text-muted-foreground" />
+      <h1 className="text-xl font-semibold">Acesso restrito</h1>
+      <p className="text-sm text-muted-foreground">Esta área é só para staff (admin / COO / CEO).</p>
+    </div>
+  );
+
   const filtered = profiles.filter((p) => !search || p.username.toLowerCase().includes(search.toLowerCase()) || (p.display_name ?? "").toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="max-w-5xl mx-auto p-6 md:p-10 space-y-6">
+    <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-10 space-y-6">
       <header className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2"><Crown className="h-6 w-6 text-gold" />Painel Staff</h1>
@@ -158,7 +158,6 @@ function AdminPanel() {
       {!canGrantRoles && (
         <p className="text-xs text-muted-foreground">Apenas o CEO pode conceder ou revogar cargos globais.</p>
       )}
-      {!isStaff(roles) && <p>Sem acesso.</p>}
     </div>
   );
 }
