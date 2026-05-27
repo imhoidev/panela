@@ -622,6 +622,7 @@ export type Database = {
         Args: { _server: string; _user: string }
         Returns: number
       }
+      slugify: { Args: { _input: string }; Returns: string }
     }
     Enums: {
       app_role: "user" | "admin" | "coo" | "ceo"
