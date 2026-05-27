@@ -55,7 +55,7 @@ function ProfilePage() {
     if (upErr) { setUploading(null); return toast.error(upErr.message); }
     const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
     const field = kind === "avatar" ? "avatar_url" : "banner_url";
-    const { error } = await supabase.from("profiles").update({ [field]: pub.publicUrl }).eq("id", user.id);
+    const { error } = await supabase.from("profiles").update({ [field]: pub.publicUrl } as any).eq("id", user.id);
     setUploading(null);
     if (error) return toast.error(error.message);
     toast.success(`${kind === "avatar" ? "Avatar" : "Banner"} atualizado`);
