@@ -140,3 +140,38 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-accent); border-radius: 8px; border: 2px solid var(--color-background); }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
+
+/* ============ LiveKit ControlBar (espaçamento PANELA) ============ */
+.voice-controls .lk-control-bar {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  gap: 0.5rem !important;
+}
+.voice-controls .lk-button {
+  border-radius: 9999px !important;
+  height: 2.5rem !important;
+  min-width: 2.5rem !important;
+  padding: 0 0.75rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.4rem !important;
+  font-size: 0.8rem !important;
+  background: color-mix(in oklab, var(--color-accent) 70%, transparent) !important;
+  color: var(--color-foreground) !important;
+  border: 1px solid var(--color-border) !important;
+  transition: background 120ms ease, transform 120ms ease;
+}
+.voice-controls .lk-button:hover { background: var(--color-accent) !important; transform: translateY(-1px); }
+.voice-controls .lk-button[data-lk-source="microphone"][data-lk-enabled="false"],
+.voice-controls .lk-button[data-lk-source="camera"][data-lk-enabled="false"] {
+  background: color-mix(in oklab, var(--color-destructive) 30%, transparent) !important;
+  color: var(--color-destructive-foreground) !important;
+  border-color: color-mix(in oklab, var(--color-destructive) 60%, transparent) !important;
+}
+.voice-controls .lk-button-menu { display: none !important; }
+@media (max-width: 480px) {
+  .voice-controls .lk-button span { display: none; }
+  .voice-controls .lk-button { padding: 0 !important; width: 2.5rem !important; }
+}
