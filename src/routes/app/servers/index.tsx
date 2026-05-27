@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Hash, Users, Loader2 } from "lucide-react";
+import { Plus, Hash, Users, Loader2, AtSign } from "lucide-react";
 import { toast } from "sonner";
+import { slugify, isValidSlug } from "@/lib/slug";
 
 export const Route = createFileRoute("/app/servers/")({
   head: () => ({ meta: [{ title: "Meus servidores — PANELA" }] }),
@@ -25,8 +26,14 @@ function ServersIndex() {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
   const [description, setDescription] = useState("");
   const [privacy, setPrivacy] = useState<"public" | "private">("public");
+
+  const autoSlug = useMemo(() => slugify(name) || "", [name]);
+  const finalSlug = slugTouched ? slug : autoSlug;
+  const slugOk = finalSlug === "" || isValidSlug(finalSlug);
 
   async function load() {
     if (!user) return;
@@ -42,14 +49,19 @@ function ServersIndex() {
 
   async function create() {
     if (!user || !name.trim()) return;
+    if (!slugOk) return toast.error("Slug inválido (use 2-32 chars, a-z, 0-9, -).");
     setCreating(true);
     const { data, error } = await supabase.from("servers").insert({
       owner_id: user.id, name: name.trim(), description: description.trim() || null, privacy,
+      slug: finalSlug || null,
     }).select().single();
     setCreating(false);
-    if (error) return toast.error(error.message);
-    toast.success("Servidor criado!");
-    setOpen(false); setName(""); setDescription("");
+    if (error) {
+      if ((error as any).code === "23505") return toast.error("Esse slug já está em uso.");
+      return toast.error(error.message);
+    }
+    toast.success(`Servidor criado! @${data.slug}`);
+    setOpen(false); setName(""); setSlug(""); setSlugTouched(false); setDescription("");
     router.navigate({ to: "/app/servers/$serverId", params: { serverId: data.id } });
   }
 
@@ -66,6 +78,22 @@ function ServersIndex() {
             <DialogHeader><DialogTitle>Criar servidor</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div className="space-y-1.5"><Label>Nome</Label><Input value={name} onChange={(e)=>setName(e.target.value)} maxLength={48} placeholder="Minha panela" /></div>
+              <div className="space-y-1.5">
+                <Label>Slug (URL pública)</Label>
+                <div className="relative">
+                  <AtSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    className="pl-8"
+                    value={finalSlug}
+                    onChange={(e)=>{ setSlugTouched(true); setSlug(slugify(e.target.value)); }}
+                    maxLength={32}
+                    placeholder="minha-panela"
+                  />
+                </div>
+                <p className={`text-xs ${slugOk ? "text-muted-foreground" : "text-destructive"}`}>
+                  panela.app/s/{finalSlug || "<gerado-automatico>"}
+                </p>
+              </div>
               <div className="space-y-1.5"><Label>Descrição</Label><Textarea value={description} onChange={(e)=>setDescription(e.target.value)} maxLength={300} rows={3} /></div>
               <div className="space-y-1.5">
                 <Label>Privacidade</Label>
@@ -77,7 +105,7 @@ function ServersIndex() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button className="w-full" onClick={create} disabled={creating || !name.trim()}>
+              <Button className="w-full" onClick={create} disabled={creating || !name.trim() || !slugOk}>
                 {creating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Criar
               </Button>
             </div>
@@ -107,6 +135,7 @@ function ServersIndex() {
                     }
                     <div className="min-w-0">
                       <h3 className="font-semibold truncate">{s.name}</h3>
+                      {s.slug && <p className="text-[11px] text-muted-foreground/80 truncate">@{s.slug}</p>}
                       <p className="text-xs text-muted-foreground flex items-center gap-1"><Users className="h-3 w-3" />{s.member_count} {s.privacy === "private" && "· privado"}</p>
                     </div>
                   </div>

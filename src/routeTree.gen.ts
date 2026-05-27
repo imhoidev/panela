@@ -22,6 +22,7 @@ import { Route as AppDiscoverRouteImport } from './routes/app/discover'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
 import { Route as AppServersIndexRouteImport } from './routes/app/servers/index'
 import { Route as AppServersServerIdRouteImport } from './routes/app/servers/$serverId'
+import { Route as AppSSlugRouteImport } from './routes/app/s.$slug'
 import { Route as ApiLivekitTokenRouteImport } from './routes/api/livekit/token'
 import { Route as AppServersServerIdChannelIdRouteImport } from './routes/app/servers/$serverId.$channelId'
 
@@ -90,6 +91,11 @@ const AppServersServerIdRoute = AppServersServerIdRouteImport.update({
   path: '/servers/$serverId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSSlugRoute = AppSSlugRouteImport.update({
+  id: '/s/$slug',
+  path: '/s/$slug',
+  getParentRoute: () => AppRoute,
+} as any)
 const ApiLivekitTokenRoute = ApiLivekitTokenRouteImport.update({
   id: '/api/livekit/token',
   path: '/api/livekit/token',
@@ -115,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/auth/signup': typeof AuthSignupRoute
   '/app/': typeof AppIndexRoute
   '/api/livekit/token': typeof ApiLivekitTokenRoute
+  '/app/s/$slug': typeof AppSSlugRoute
   '/app/servers/$serverId': typeof AppServersServerIdRouteWithChildren
   '/app/servers/': typeof AppServersIndexRoute
   '/app/servers/$serverId/$channelId': typeof AppServersServerIdChannelIdRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/auth/signup': typeof AuthSignupRoute
   '/app': typeof AppIndexRoute
   '/api/livekit/token': typeof ApiLivekitTokenRoute
+  '/app/s/$slug': typeof AppSSlugRoute
   '/app/servers/$serverId': typeof AppServersServerIdRouteWithChildren
   '/app/servers': typeof AppServersIndexRoute
   '/app/servers/$serverId/$channelId': typeof AppServersServerIdChannelIdRoute
@@ -149,6 +157,7 @@ export interface FileRoutesById {
   '/auth/signup': typeof AuthSignupRoute
   '/app/': typeof AppIndexRoute
   '/api/livekit/token': typeof ApiLivekitTokenRoute
+  '/app/s/$slug': typeof AppSSlugRoute
   '/app/servers/$serverId': typeof AppServersServerIdRouteWithChildren
   '/app/servers/': typeof AppServersIndexRoute
   '/app/servers/$serverId/$channelId': typeof AppServersServerIdChannelIdRoute
@@ -168,6 +177,7 @@ export interface FileRouteTypes {
     | '/auth/signup'
     | '/app/'
     | '/api/livekit/token'
+    | '/app/s/$slug'
     | '/app/servers/$serverId'
     | '/app/servers/'
     | '/app/servers/$serverId/$channelId'
@@ -184,6 +194,7 @@ export interface FileRouteTypes {
     | '/auth/signup'
     | '/app'
     | '/api/livekit/token'
+    | '/app/s/$slug'
     | '/app/servers/$serverId'
     | '/app/servers'
     | '/app/servers/$serverId/$channelId'
@@ -201,6 +212,7 @@ export interface FileRouteTypes {
     | '/auth/signup'
     | '/app/'
     | '/api/livekit/token'
+    | '/app/s/$slug'
     | '/app/servers/$serverId'
     | '/app/servers/'
     | '/app/servers/$serverId/$channelId'
@@ -306,6 +318,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppServersServerIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/s/$slug': {
+      id: '/app/s/$slug'
+      path: '/s/$slug'
+      fullPath: '/app/s/$slug'
+      preLoaderRoute: typeof AppSSlugRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/api/livekit/token': {
       id: '/api/livekit/token'
       path: '/api/livekit/token'
@@ -341,6 +360,7 @@ interface AppRouteChildren {
   AppProfileRoute: typeof AppProfileRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppSSlugRoute: typeof AppSSlugRoute
   AppServersServerIdRoute: typeof AppServersServerIdRouteWithChildren
   AppServersIndexRoute: typeof AppServersIndexRoute
 }
@@ -352,6 +372,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppProfileRoute: AppProfileRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppIndexRoute: AppIndexRoute,
+  AppSSlugRoute: AppSSlugRoute,
   AppServersServerIdRoute: AppServersServerIdRouteWithChildren,
   AppServersIndexRoute: AppServersIndexRoute,
 }
