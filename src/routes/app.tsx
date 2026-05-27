@@ -1,11 +1,11 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
+import { RequireAuth } from "@/components/AuthGate";
 
 export const Route = createFileRoute("/app")({
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) throw redirect({ to: "/auth/login" });
-  },
-  component: () => (<AppShell><Outlet /></AppShell>),
+  component: () => (
+    <RequireAuth>
+      <AppShell><Outlet /></AppShell>
+    </RequireAuth>
+  ),
 });
