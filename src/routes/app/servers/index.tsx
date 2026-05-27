@@ -26,8 +26,14 @@ function ServersIndex() {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
   const [description, setDescription] = useState("");
   const [privacy, setPrivacy] = useState<"public" | "private">("public");
+
+  const autoSlug = useMemo(() => slugify(name) || "", [name]);
+  const finalSlug = slugTouched ? slug : autoSlug;
+  const slugOk = finalSlug === "" || isValidSlug(finalSlug);
 
   async function load() {
     if (!user) return;
@@ -43,14 +49,19 @@ function ServersIndex() {
 
   async function create() {
     if (!user || !name.trim()) return;
+    if (!slugOk) return toast.error("Slug inválido (use 2-32 chars, a-z, 0-9, -).");
     setCreating(true);
     const { data, error } = await supabase.from("servers").insert({
       owner_id: user.id, name: name.trim(), description: description.trim() || null, privacy,
+      slug: finalSlug || null,
     }).select().single();
     setCreating(false);
-    if (error) return toast.error(error.message);
-    toast.success("Servidor criado!");
-    setOpen(false); setName(""); setDescription("");
+    if (error) {
+      if ((error as any).code === "23505") return toast.error("Esse slug já está em uso.");
+      return toast.error(error.message);
+    }
+    toast.success(`Servidor criado! @${data.slug}`);
+    setOpen(false); setName(""); setSlug(""); setSlugTouched(false); setDescription("");
     router.navigate({ to: "/app/servers/$serverId", params: { serverId: data.id } });
   }
 
