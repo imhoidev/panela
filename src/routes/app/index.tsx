@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
 import { UsernameBadge } from "@/components/UsernameBadge";
-import { Sparkles, MessageCircle, Compass, Users } from "lucide-react";
+import { Sparkles, Hash, Compass, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/app/")({
@@ -32,18 +32,16 @@ function Home() {
             </p>
             <div className="mt-3 flex gap-2">
               <Link to="/app/profile"><Button size="sm" variant="outline">Editar perfil</Button></Link>
-              {profile.current_plan === "free" && (
-                <Link to="/app/plans"><Button size="sm">Quero ser PRO</Button></Link>
-              )}
+              {profile.current_plan === "free" && <Link to="/app/plans"><Button size="sm">Quero ser PRO</Button></Link>}
             </div>
           </div>
         </div>
       </Card>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        <Card className="p-5"><Compass className="h-5 w-5 text-primary" /><h3 className="font-semibold mt-2">Descobrir servidores</h3><p className="text-sm text-muted-foreground mt-1">Em breve: lista pública com filtros por foco.</p></Card>
-        <Card className="p-5"><MessageCircle className="h-5 w-5 text-primary" /><h3 className="font-semibold mt-2">Suas conversas</h3><p className="text-sm text-muted-foreground mt-1">Servidores e DMs aparecerão aqui na Fase 2.</p></Card>
-        <Card className="p-5 sm:col-span-2"><Users className="h-5 w-5 text-primary" /><h3 className="font-semibold mt-2">Roadmap</h3><p className="text-sm text-muted-foreground mt-1">MVP → Beta (chat + chamadas) → Versão completa (LiveKit, push, moderação). Veja em <Link to="/app/settings" className="text-primary underline">Configurações</Link>.</p></Card>
+        <Link to="/app/servers"><Card className="p-5 hover:border-primary/50 transition-colors h-full"><Hash className="h-5 w-5 text-primary" /><h3 className="font-semibold mt-2">Meus servidores</h3><p className="text-sm text-muted-foreground mt-1">Crie ou abra suas panelas pessoais.</p></Card></Link>
+        <Link to="/app/discover"><Card className="p-5 hover:border-primary/50 transition-colors h-full"><Compass className="h-5 w-5 text-primary" /><h3 className="font-semibold mt-2">Descobrir</h3><p className="text-sm text-muted-foreground mt-1">Comunidades públicas pra entrar agora.</p></Card></Link>
+        <Link to="/app/profile" className="sm:col-span-2"><Card className="p-5 hover:border-primary/50 transition-colors"><Users className="h-5 w-5 text-primary" /><h3 className="font-semibold mt-2">Personalize seu perfil</h3><p className="text-sm text-muted-foreground mt-1">Cor do nome, status, banner, redes — capricha que o pessoal vê.</p></Card></Link>
       </div>
     </div>
   );
