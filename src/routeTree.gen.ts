@@ -20,6 +20,9 @@ import { Route as AppProfileRouteImport } from './routes/app/profile'
 import { Route as AppPlansRouteImport } from './routes/app/plans'
 import { Route as AppDiscoverRouteImport } from './routes/app/discover'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
+import { Route as AppServersIndexRouteImport } from './routes/app/servers/index'
+import { Route as AppServersServerIdRouteImport } from './routes/app/servers/$serverId'
+import { Route as AppServersServerIdChannelIdRouteImport } from './routes/app/servers/$serverId.$channelId'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -76,6 +79,22 @@ const AppAdminRoute = AppAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
+const AppServersIndexRoute = AppServersIndexRouteImport.update({
+  id: '/servers/',
+  path: '/servers/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppServersServerIdRoute = AppServersServerIdRouteImport.update({
+  id: '/servers/$serverId',
+  path: '/servers/$serverId',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppServersServerIdChannelIdRoute =
+  AppServersServerIdChannelIdRouteImport.update({
+    id: '/$channelId',
+    path: '/$channelId',
+    getParentRoute: () => AppServersServerIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -89,6 +108,9 @@ export interface FileRoutesByFullPath {
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/app/': typeof AppIndexRoute
+  '/app/servers/$serverId': typeof AppServersServerIdRouteWithChildren
+  '/app/servers/': typeof AppServersIndexRoute
+  '/app/servers/$serverId/$channelId': typeof AppServersServerIdChannelIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -101,6 +123,9 @@ export interface FileRoutesByTo {
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/app': typeof AppIndexRoute
+  '/app/servers/$serverId': typeof AppServersServerIdRouteWithChildren
+  '/app/servers': typeof AppServersIndexRoute
+  '/app/servers/$serverId/$channelId': typeof AppServersServerIdChannelIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -115,6 +140,9 @@ export interface FileRoutesById {
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/app/': typeof AppIndexRoute
+  '/app/servers/$serverId': typeof AppServersServerIdRouteWithChildren
+  '/app/servers/': typeof AppServersIndexRoute
+  '/app/servers/$serverId/$channelId': typeof AppServersServerIdChannelIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -130,6 +158,9 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/signup'
     | '/app/'
+    | '/app/servers/$serverId'
+    | '/app/servers/'
+    | '/app/servers/$serverId/$channelId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -142,6 +173,9 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/signup'
     | '/app'
+    | '/app/servers/$serverId'
+    | '/app/servers'
+    | '/app/servers/$serverId/$channelId'
   id:
     | '__root__'
     | '/'
@@ -155,6 +189,9 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/signup'
     | '/app/'
+    | '/app/servers/$serverId'
+    | '/app/servers/'
+    | '/app/servers/$serverId/$channelId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -242,8 +279,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/servers/': {
+      id: '/app/servers/'
+      path: '/servers'
+      fullPath: '/app/servers/'
+      preLoaderRoute: typeof AppServersIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/servers/$serverId': {
+      id: '/app/servers/$serverId'
+      path: '/servers/$serverId'
+      fullPath: '/app/servers/$serverId'
+      preLoaderRoute: typeof AppServersServerIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/servers/$serverId/$channelId': {
+      id: '/app/servers/$serverId/$channelId'
+      path: '/$channelId'
+      fullPath: '/app/servers/$serverId/$channelId'
+      preLoaderRoute: typeof AppServersServerIdChannelIdRouteImport
+      parentRoute: typeof AppServersServerIdRoute
+    }
   }
 }
+
+interface AppServersServerIdRouteChildren {
+  AppServersServerIdChannelIdRoute: typeof AppServersServerIdChannelIdRoute
+}
+
+const AppServersServerIdRouteChildren: AppServersServerIdRouteChildren = {
+  AppServersServerIdChannelIdRoute: AppServersServerIdChannelIdRoute,
+}
+
+const AppServersServerIdRouteWithChildren =
+  AppServersServerIdRoute._addFileChildren(AppServersServerIdRouteChildren)
 
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
@@ -252,6 +321,8 @@ interface AppRouteChildren {
   AppProfileRoute: typeof AppProfileRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppServersServerIdRoute: typeof AppServersServerIdRouteWithChildren
+  AppServersIndexRoute: typeof AppServersIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -261,6 +332,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppProfileRoute: AppProfileRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppIndexRoute: AppIndexRoute,
+  AppServersServerIdRoute: AppServersServerIdRouteWithChildren,
+  AppServersIndexRoute: AppServersIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -285,3 +358,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
