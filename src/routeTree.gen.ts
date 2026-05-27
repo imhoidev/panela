@@ -22,6 +22,7 @@ import { Route as AppDiscoverRouteImport } from './routes/app/discover'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
 import { Route as AppServersIndexRouteImport } from './routes/app/servers/index'
 import { Route as AppServersServerIdRouteImport } from './routes/app/servers/$serverId'
+import { Route as ApiLivekitTokenRouteImport } from './routes/api/livekit/token'
 import { Route as AppServersServerIdChannelIdRouteImport } from './routes/app/servers/$serverId.$channelId'
 
 const AuthRoute = AuthRouteImport.update({
@@ -89,6 +90,11 @@ const AppServersServerIdRoute = AppServersServerIdRouteImport.update({
   path: '/servers/$serverId',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiLivekitTokenRoute = ApiLivekitTokenRouteImport.update({
+  id: '/api/livekit/token',
+  path: '/api/livekit/token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppServersServerIdChannelIdRoute =
   AppServersServerIdChannelIdRouteImport.update({
     id: '/$channelId',
@@ -108,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/app/': typeof AppIndexRoute
+  '/api/livekit/token': typeof ApiLivekitTokenRoute
   '/app/servers/$serverId': typeof AppServersServerIdRouteWithChildren
   '/app/servers/': typeof AppServersIndexRoute
   '/app/servers/$serverId/$channelId': typeof AppServersServerIdChannelIdRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/app': typeof AppIndexRoute
+  '/api/livekit/token': typeof ApiLivekitTokenRoute
   '/app/servers/$serverId': typeof AppServersServerIdRouteWithChildren
   '/app/servers': typeof AppServersIndexRoute
   '/app/servers/$serverId/$channelId': typeof AppServersServerIdChannelIdRoute
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/auth/login': typeof AuthLoginRoute
   '/auth/signup': typeof AuthSignupRoute
   '/app/': typeof AppIndexRoute
+  '/api/livekit/token': typeof ApiLivekitTokenRoute
   '/app/servers/$serverId': typeof AppServersServerIdRouteWithChildren
   '/app/servers/': typeof AppServersIndexRoute
   '/app/servers/$serverId/$channelId': typeof AppServersServerIdChannelIdRoute
@@ -158,6 +167,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/signup'
     | '/app/'
+    | '/api/livekit/token'
     | '/app/servers/$serverId'
     | '/app/servers/'
     | '/app/servers/$serverId/$channelId'
@@ -173,6 +183,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/signup'
     | '/app'
+    | '/api/livekit/token'
     | '/app/servers/$serverId'
     | '/app/servers'
     | '/app/servers/$serverId/$channelId'
@@ -189,6 +200,7 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/signup'
     | '/app/'
+    | '/api/livekit/token'
     | '/app/servers/$serverId'
     | '/app/servers/'
     | '/app/servers/$serverId/$channelId'
@@ -198,6 +210,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRouteWithChildren
+  ApiLivekitTokenRoute: typeof ApiLivekitTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -293,6 +306,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppServersServerIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/api/livekit/token': {
+      id: '/api/livekit/token'
+      path: '/api/livekit/token'
+      fullPath: '/api/livekit/token'
+      preLoaderRoute: typeof ApiLivekitTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/servers/$serverId/$channelId': {
       id: '/app/servers/$serverId/$channelId'
       path: '/$channelId'
@@ -354,7 +374,18 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRouteWithChildren,
+  ApiLivekitTokenRoute: ApiLivekitTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
