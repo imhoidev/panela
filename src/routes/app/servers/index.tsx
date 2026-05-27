@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Hash, Users, Loader2 } from "lucide-react";
+import { Plus, Hash, Users, Loader2, AtSign } from "lucide-react";
 import { toast } from "sonner";
+import { slugify, isValidSlug } from "@/lib/slug";
 
 export const Route = createFileRoute("/app/servers/")({
   head: () => ({ meta: [{ title: "Meus servidores — PANELA" }] }),
