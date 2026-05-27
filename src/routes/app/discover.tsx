@@ -72,6 +72,7 @@ function Discover() {
                     : <div className="h-12 w-12 rounded-xl bg-primary/15 grid place-items-center font-bold text-primary">{s.name[0]?.toUpperCase()}</div>}
                   <div className="min-w-0">
                     <h3 className="font-semibold truncate">{s.name}</h3>
+                    {s.slug && <p className="text-[11px] text-muted-foreground/80 truncate font-mono">@{s.slug}</p>}
                     <p className="text-xs text-muted-foreground flex items-center gap-1"><Users className="h-3 w-3" />{s.member_count}</p>
                   </div>
                 </div>
