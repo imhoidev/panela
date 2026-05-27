@@ -71,8 +71,27 @@ function ServerLayout() {
 
   if (!server) return <div className="p-8 text-muted-foreground">Carregando servidor…</div>;
   const canManage = memberLevel >= 80;
+  const isOwner = server.owner_id === user?.id;
 
   const channelsList = (
+    <ChannelsBlock
+      server={server}
+      channels={channels}
+      serverId={serverId}
+      loc={loc}
+      canManage={canManage}
+      isOwner={isOwner}
+      open={open}
+      setOpen={setOpen}
+      newName={newName}
+      setNewName={setNewName}
+      newType={newType}
+      setNewType={setNewType}
+      addChannel={addChannel}
+      leave={leave}
+      onSlugChanged={load}
+    />
+  );
     <ChannelsBlock
       server={server}
       channels={channels}
