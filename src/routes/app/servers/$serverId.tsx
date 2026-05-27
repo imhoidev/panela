@@ -121,12 +121,13 @@ function ServerLayout() {
 }
 
 function ChannelsBlock({
-  server, channels, serverId, loc, canManage, open, setOpen, newName, setNewName, newType, setNewType, addChannel, leave,
+  server, channels, serverId, loc, canManage, isOwner, open, setOpen, newName, setNewName, newType, setNewType, addChannel, leave, onSlugChanged,
 }: any) {
   return (
     <>
-      <div className="p-4 border-b border-sidebar-border">
+      <div className="p-4 border-b border-sidebar-border space-y-1.5">
         <h2 className="font-semibold truncate">{server.name}</h2>
+        <SlugTag slug={server.slug} canEdit={isOwner} serverId={serverId} onSaved={onSlugChanged} />
         <p className="text-xs text-muted-foreground truncate">{server.member_count} membros</p>
       </div>
       <div className="flex-1 overflow-auto p-2 space-y-0.5">
@@ -175,3 +176,68 @@ function ChannelsBlock({
     </>
   );
 }
+
+function SlugTag({ slug, canEdit, serverId, onSaved }: { slug: string | null; canEdit: boolean; serverId: string; onSaved: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [val, setVal] = useState(slug ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function copy() {
+    if (!slug) return;
+    const url = `${window.location.origin}/app/s/${slug}`;
+    try { await navigator.clipboard.writeText(url); setCopied(true); toast.success("Link copiado!"); setTimeout(() => setCopied(false), 1500); }
+    catch { toast.error("Não consegui copiar"); }
+  }
+
+  async function save() {
+    const s = slugify(val);
+    if (!isValidSlug(s)) return toast.error("Slug inválido (2-32 chars, a-z, 0-9, -).");
+    setSaving(true);
+    const { error } = await supabase.from("servers").update({ slug: s }).eq("id", serverId);
+    setSaving(false);
+    if (error) {
+      if ((error as any).code === "23505" || /slug_taken/.test(error.message)) return toast.error("Esse slug já está em uso.");
+      return toast.error(error.message);
+    }
+    toast.success("Slug atualizado!");
+    setEditOpen(false); onSaved();
+  }
+
+  if (!slug) return null;
+  return (
+    <div className="flex items-center gap-1 text-[11px] text-muted-foreground/90">
+      <AtSign className="h-3 w-3 shrink-0" />
+      <span className="truncate font-mono">{slug}</span>
+      <button onClick={copy} className="ml-1 p-1 rounded hover:bg-sidebar-accent/60 text-muted-foreground hover:text-foreground" title="Copiar link">
+        {copied ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
+      </button>
+      {canEdit && (
+        <Dialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (o) setVal(slug); }}>
+          <DialogTrigger asChild>
+            <button className="p-1 rounded hover:bg-sidebar-accent/60 text-muted-foreground hover:text-foreground" title="Editar slug">
+              <Settings className="h-3 w-3" />
+            </button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Editar slug</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Slug</Label>
+                <div className="relative">
+                  <AtSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-8 font-mono" value={val} onChange={(e) => setVal(slugify(e.target.value))} maxLength={32} />
+                </div>
+                <p className="text-xs text-muted-foreground">panela.app/s/{slugify(val) || "—"}</p>
+              </div>
+              <Button className="w-full" onClick={save} disabled={saving || slugify(val) === slug}>
+                {saving ? "Salvando…" : "Salvar"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
