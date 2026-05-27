@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Hash, Plus, Settings, LogOut, Volume2, Menu, Users } from "lucide-react";
+import { Hash, Plus, Settings, LogOut, Volume2, Menu, Users, Copy, AtSign, Check } from "lucide-react";
 import { toast } from "sonner";
+import { slugify, isValidSlug } from "@/lib/slug";
 
 export const Route = createFileRoute("/app/servers/$serverId")({
   component: ServerLayout,
