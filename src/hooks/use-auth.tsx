@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider
       value={{
         user, session, profile, roles, loading,
-        refreshProfile: async () => user && loadProfileAndRoles(user.id),
+        refreshProfile: async () => { if (user) await loadProfileAndRoles(user.id); },
         signOut: async () => { await supabase.auth.signOut(); },
       }}
     >
