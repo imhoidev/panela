@@ -1,10 +1,20 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { FullScreenLoader } from "@/components/AuthGate";
 
-// O "site" da PANELA É o app. Sem landing — manda direto pro /auth/login;
-// se já houver sessão, /auth/login redireciona pra /app.
+// O "site" é o app. Aqui só decidimos client-side pra evitar
+// loops de SSR sem sessão.
 export const Route = createFileRoute("/")({
-  beforeLoad: () => {
-    throw redirect({ to: "/auth/login" });
-  },
-  component: () => null,
+  component: IndexGate,
 });
+
+function IndexGate() {
+  const { ready, user } = useAuth();
+  const router = useRouter();
+  useEffect(() => {
+    if (!ready) return;
+    router.navigate({ to: user ? "/app" : "/auth/login", replace: true });
+  }, [ready, user]);
+  return <FullScreenLoader label="Abrindo a PANELA…" />;
+}

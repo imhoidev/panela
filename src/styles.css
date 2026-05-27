@@ -5,12 +5,9 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================
-   PANELA — Design System
-   Vibe: 2007–2010 retrô (forums, MSN, MySpace) + clean 2026
-   - Dark mode padrão
-   - Cantos arredondados levemente
-   - Acentos quentes (laranja "panela" + dourado nostálgico)
-   - Tipografia: Inter (default) + Comic Neue / Lobster opcionais
+   PANELA — Design System v2
+   Base #121215 (dark) com acentos quentes (laranja + dourado nostálgico).
+   Tipografia: Inter + Space Grotesk display + Comic Neue opcional.
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Comic+Neue:wght@400;700&family=Space+Grotesk:wght@500;600;700&display=swap');
@@ -57,76 +54,64 @@
   --font-display: 'Space Grotesk', 'Inter', sans-serif;
 }
 
-/* Dark é o padrão. Base #121215 com acentos quentes. */
+/* Dark default. Background #121215, surfaces e bordas calibradas. */
 :root, .dark {
-  --radius: 0.625rem;
-  --background: oklch(0.155 0.003 270);            /* #121215 */
+  --radius: 0.75rem;
+
+  --background: oklch(0.176 0.0035 280);            /* #121215 */
   --foreground: oklch(0.96 0.012 80);
-  --card: oklch(0.195 0.004 270);
+
+  --card: oklch(0.214 0.0042 280);                  /* #1a1a1f */
   --card-foreground: oklch(0.96 0.012 80);
-  --popover: oklch(0.195 0.004 270);
+  --popover: oklch(0.22 0.005 280);
   --popover-foreground: oklch(0.96 0.012 80);
-  --primary: oklch(0.74 0.18 45);                  /* laranja PANELA */
+
+  --primary: oklch(0.755 0.18 45);                  /* laranja PANELA */
   --primary-foreground: oklch(0.16 0.005 270);
-  --secondary: oklch(0.235 0.005 270);
+
+  --secondary: oklch(0.245 0.006 280);
   --secondary-foreground: oklch(0.96 0.012 80);
-  --muted: oklch(0.22 0.004 270);
+
+  --muted: oklch(0.235 0.005 280);
   --muted-foreground: oklch(0.68 0.012 270);
-  --accent: oklch(0.28 0.025 50);
+
+  --accent: oklch(0.29 0.022 50);
   --accent-foreground: oklch(0.96 0.012 80);
+
   --destructive: oklch(0.62 0.22 25);
   --destructive-foreground: oklch(0.98 0.01 80);
-  --border: oklch(0.27 0.006 270);
-  --input: oklch(0.22 0.004 270);
-  --ring: oklch(0.74 0.18 45);
-  --panela: oklch(0.74 0.18 45);
-  --panela-foreground: oklch(0.16 0.005 270);
-  --gold: oklch(0.82 0.16 85);
-  --sidebar: oklch(0.13 0.003 270);
-  --sidebar-foreground: oklch(0.92 0.012 80);
-  --sidebar-primary: oklch(0.74 0.18 45);
-  --sidebar-primary-foreground: oklch(0.16 0.005 270);
-  --sidebar-accent: oklch(0.215 0.005 270);
-  --sidebar-accent-foreground: oklch(0.96 0.012 80);
-  --sidebar-border: oklch(0.25 0.006 270);
-  --sidebar-ring: oklch(0.74 0.18 45);
-}
 
-/* Modo claro opcional (papel/forum 2008) */
-.light {
-  --background: oklch(0.98 0.012 80);
-  --foreground: oklch(0.22 0.012 60);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.012 60);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.012 60);
-  --primary: oklch(0.62 0.18 45);
-  --primary-foreground: oklch(0.98 0.01 80);
-  --secondary: oklch(0.94 0.012 70);
-  --secondary-foreground: oklch(0.22 0.012 60);
-  --muted: oklch(0.94 0.012 70);
-  --muted-foreground: oklch(0.45 0.014 60);
-  --accent: oklch(0.9 0.04 60);
-  --accent-foreground: oklch(0.22 0.012 60);
-  --border: oklch(0.88 0.012 70);
-  --input: oklch(0.92 0.012 70);
-  --ring: oklch(0.62 0.18 45);
-  --sidebar: oklch(0.96 0.012 80);
-  --sidebar-foreground: oklch(0.22 0.012 60);
-  --sidebar-accent: oklch(0.92 0.012 70);
-  --sidebar-accent-foreground: oklch(0.22 0.012 60);
-  --sidebar-border: oklch(0.88 0.012 70);
+  --border: oklch(0.275 0.006 280);
+  --input: oklch(0.235 0.005 280);
+  --ring: oklch(0.755 0.18 45);
+
+  --panela: oklch(0.755 0.18 45);
+  --panela-foreground: oklch(0.16 0.005 270);
+  --gold: oklch(0.83 0.16 85);
+
+  --sidebar: oklch(0.149 0.0035 280);               /* #101013 */
+  --sidebar-foreground: oklch(0.92 0.012 80);
+  --sidebar-primary: oklch(0.755 0.18 45);
+  --sidebar-primary-foreground: oklch(0.16 0.005 270);
+  --sidebar-accent: oklch(0.225 0.005 280);
+  --sidebar-accent-foreground: oklch(0.96 0.012 80);
+  --sidebar-border: oklch(0.26 0.006 280);
+  --sidebar-ring: oklch(0.755 0.18 45);
 }
 
 @layer base {
   * { border-color: var(--color-border); }
-  html, body { background: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); }
+  html, body { background: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
   body {
     background-image:
-      radial-gradient(circle at 15% -5%, oklch(0.74 0.18 45 / 0.07), transparent 45%),
-      radial-gradient(circle at 90% 105%, oklch(0.82 0.16 85 / 0.05), transparent 45%);
+      radial-gradient(circle at 12% -10%, oklch(0.755 0.18 45 / 0.08), transparent 50%),
+      radial-gradient(circle at 92% 110%, oklch(0.83 0.16 85 / 0.05), transparent 50%);
     min-height: 100vh;
+    overscroll-behavior: none;
   }
+  /* Safe-area mobile */
+  .pb-safe { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+  .pt-safe { padding-top: max(0.25rem, env(safe-area-inset-top)); }
 }
 
 /* ============ Efeitos PRO ============ */
@@ -142,9 +127,7 @@
 }
 .fx-rainbow { animation: panela-rainbow 4s linear infinite; }
 
-@keyframes panela-typing {
-  from { width: 0; } to { width: 100%; }
-}
+@keyframes panela-typing { from { width: 0; } to { width: 100%; } }
 .fx-typing {
   display: inline-block; overflow: hidden; white-space: nowrap;
   border-right: 2px solid currentColor;
@@ -152,8 +135,8 @@
 }
 @keyframes blink { 50% { border-color: transparent; } }
 
-/* Vibe retrô: scrollbar estilizada */
+/* Scrollbar discreta */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: var(--color-sidebar); }
-::-webkit-scrollbar-thumb { background: var(--color-accent); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-accent); border-radius: 8px; border: 2px solid var(--color-background); }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }

@@ -1,14 +1,12 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { RequireGuest } from "@/components/AuthGate";
 
 export const Route = createFileRoute("/auth")({
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) throw redirect({ to: "/app" });
-  },
   component: () => (
-    <div className="min-h-screen grid place-items-center px-4 py-10">
-      <Outlet />
-    </div>
+    <RequireGuest>
+      <div className="min-h-screen grid place-items-center px-4 py-10 bg-background">
+        <Outlet />
+      </div>
+    </RequireGuest>
   ),
 });

@@ -11,7 +11,8 @@ interface AuthCtx {
   session: Session | null;
   profile: Profile | null;
   roles: AppRole[];
-  loading: boolean;
+  /** false até a primeira resposta de getSession() resolver no client. */
+  ready: boolean;
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -23,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
 
   async function loadProfileAndRoles(uid: string) {
     const [{ data: p }, { data: r }] = await Promise.all([
@@ -35,21 +36,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    // Listener primeiro (síncrono dentro do callback) — recomenda Supabase.
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
+        // defer pra não rodar fetch dentro do callback
         setTimeout(() => loadProfileAndRoles(s.user.id), 0);
       } else {
         setProfile(null);
         setRoles([]);
       }
     });
+    // Depois pega sessão atual
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setUser(data.session?.user ?? null);
       if (data.session?.user) loadProfileAndRoles(data.session.user.id);
-      setLoading(false);
+      setReady(true);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -57,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider
       value={{
-        user, session, profile, roles, loading,
+        user, session, profile, roles, ready,
         refreshProfile: async () => { if (user) await loadProfileAndRoles(user.id); },
         signOut: async () => { await supabase.auth.signOut(); },
       }}
