@@ -92,22 +92,6 @@ function ServerLayout() {
       onSlugChanged={load}
     />
   );
-    <ChannelsBlock
-      server={server}
-      channels={channels}
-      serverId={serverId}
-      loc={loc}
-      canManage={canManage}
-      open={open}
-      setOpen={setOpen}
-      newName={newName}
-      setNewName={setNewName}
-      newType={newType}
-      setNewType={setNewType}
-      addChannel={addChannel}
-      leave={leave}
-    />
-  );
 
   return (
     <div className="flex h-full min-h-0">
