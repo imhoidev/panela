@@ -78,6 +78,22 @@ function ServersIndex() {
             <DialogHeader><DialogTitle>Criar servidor</DialogTitle></DialogHeader>
             <div className="space-y-4">
               <div className="space-y-1.5"><Label>Nome</Label><Input value={name} onChange={(e)=>setName(e.target.value)} maxLength={48} placeholder="Minha panela" /></div>
+              <div className="space-y-1.5">
+                <Label>Slug (URL pública)</Label>
+                <div className="relative">
+                  <AtSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    className="pl-8"
+                    value={finalSlug}
+                    onChange={(e)=>{ setSlugTouched(true); setSlug(slugify(e.target.value)); }}
+                    maxLength={32}
+                    placeholder="minha-panela"
+                  />
+                </div>
+                <p className={`text-xs ${slugOk ? "text-muted-foreground" : "text-destructive"}`}>
+                  panela.app/s/{finalSlug || "<gerado-automatico>"}
+                </p>
+              </div>
               <div className="space-y-1.5"><Label>Descrição</Label><Textarea value={description} onChange={(e)=>setDescription(e.target.value)} maxLength={300} rows={3} /></div>
               <div className="space-y-1.5">
                 <Label>Privacidade</Label>
@@ -89,7 +105,7 @@ function ServersIndex() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button className="w-full" onClick={create} disabled={creating || !name.trim()}>
+              <Button className="w-full" onClick={create} disabled={creating || !name.trim() || !slugOk}>
                 {creating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Criar
               </Button>
             </div>
