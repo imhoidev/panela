@@ -5,7 +5,7 @@ import {
 } from "@livekit/components-react";
 import { Track } from "livekit-client";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, PhoneOff, Phone } from "lucide-react";
+import { Loader2, PhoneOff, Phone, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -47,16 +47,19 @@ export function VoiceRoom({
 
   if (!joined || !token) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center gap-4">
-        <div className="h-14 w-14 rounded-full bg-primary/15 grid place-items-center text-primary">
-          <Phone className="h-6 w-6" />
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center gap-5">
+        <div className="relative">
+          <div className="absolute inset-0 rounded-full bg-primary/20 blur-2xl" />
+          <div className="relative h-20 w-20 rounded-full bg-gradient-to-br from-primary/30 to-primary/10 border border-primary/30 grid place-items-center text-primary">
+            <Phone className="h-8 w-8" />
+          </div>
         </div>
-        <div>
-          <p className="font-semibold">Canal de voz</p>
-          <p className="text-sm text-muted-foreground">Entre pra falar com a galera em tempo real.</p>
+        <div className="space-y-1.5 max-w-sm">
+          <p className="text-xl font-semibold">Canal de voz</p>
+          <p className="text-sm text-muted-foreground">Entre pra falar com a galera em tempo real. Microfone, câmera e tela.</p>
         </div>
-        <Button onClick={join} disabled={loading} size="lg">
-          {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Phone className="h-4 w-4 mr-2" />}
+        <Button onClick={join} disabled={loading} size="lg" className="min-w-[180px] h-11">
+          {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
           Entrar na sala
         </Button>
       </div>
@@ -74,18 +77,29 @@ export function VoiceRoom({
       onDisconnected={() => { setJoined(false); setToken(null); }}
       className="h-full"
     >
-      <div className="flex flex-col h-full">
-        <div className="flex-1 min-h-0 overflow-auto p-2">
+      <div className="flex flex-col h-full bg-gradient-to-b from-background to-card/40">
+        <div className="flex-1 min-h-0 overflow-auto p-3 sm:p-4">
           <Stage />
         </div>
-        <div className="border-t border-border bg-card/40 p-2 flex items-center justify-between gap-2 pb-safe">
-          <ControlBar
-            variation="minimal"
-            controls={{ microphone: true, camera: true, screenShare: true, chat: false, leave: false }}
-          />
-          <Button variant="destructive" size="sm" onClick={() => { setJoined(false); setToken(null); }}>
-            <PhoneOff className="h-4 w-4 mr-1.5" /> Sair
-          </Button>
+        <div className="border-t border-border bg-card/70 backdrop-blur supports-[backdrop-filter]:bg-card/60 px-3 sm:px-5 py-3 sm:py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="mx-auto max-w-3xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex-1 min-w-0 flex items-center justify-center sm:justify-start">
+              <div className="voice-controls flex items-center gap-2 sm:gap-3 rounded-full bg-background/60 border border-border px-2 sm:px-3 py-1.5">
+                <ControlBar
+                  variation="minimal"
+                  controls={{ microphone: true, camera: true, screenShare: true, chat: false, leave: false }}
+                />
+              </div>
+            </div>
+            <Button
+              variant="destructive"
+              size="lg"
+              className="h-11 rounded-full px-5 shrink-0"
+              onClick={() => { setJoined(false); setToken(null); }}
+            >
+              <PhoneOff className="h-4 w-4 mr-2" /> Sair
+            </Button>
+          </div>
         </div>
       </div>
       <RoomAudioRenderer />
