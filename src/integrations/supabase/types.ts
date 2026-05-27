@@ -14,16 +14,621 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      channels: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          min_age: number | null
+          min_level: number | null
+          name: string
+          position: number | null
+          server_id: string
+          topic: string | null
+          type: Database["public"]["Enums"]["channel_type"]
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          min_age?: number | null
+          min_level?: number | null
+          name: string
+          position?: number | null
+          server_id: string
+          topic?: string | null
+          type?: Database["public"]["Enums"]["channel_type"]
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          min_age?: number | null
+          min_level?: number | null
+          name?: string
+          position?: number | null
+          server_id?: string
+          topic?: string | null
+          type?: Database["public"]["Enums"]["channel_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channels_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_attachments: {
+        Row: {
+          exif: Json | null
+          height: number | null
+          id: string
+          message_id: string
+          mime_type: string | null
+          size_bytes: number | null
+          url: string
+          width: number | null
+        }
+        Insert: {
+          exif?: Json | null
+          height?: number | null
+          id?: string
+          message_id: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          url: string
+          width?: number | null
+        }
+        Update: {
+          exif?: Json | null
+          height?: number | null
+          id?: string
+          message_id?: string
+          mime_type?: string | null
+          size_bytes?: number | null
+          url?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_reactions: {
+        Row: {
+          created_at: string
+          emoji: string
+          id: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          id?: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          id?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_reactions_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          author_id: string
+          channel_id: string
+          content: string | null
+          created_at: string
+          edited_at: string | null
+          id: string
+          reply_to: string | null
+          thread_root: string | null
+        }
+        Insert: {
+          author_id: string
+          channel_id: string
+          content?: string | null
+          created_at?: string
+          edited_at?: string | null
+          id?: string
+          reply_to?: string | null
+          thread_root?: string | null
+        }
+        Update: {
+          author_id?: string
+          channel_id?: string
+          content?: string | null
+          created_at?: string
+          edited_at?: string | null
+          id?: string
+          reply_to?: string | null
+          thread_root?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_fkey"
+            columns: ["reply_to"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_thread_root_fkey"
+            columns: ["thread_root"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          age_verified: boolean | null
+          avatar_url: string | null
+          banner_url: string | null
+          bio: string | null
+          bio_rich: Json | null
+          birthdate: string | null
+          created_at: string
+          current_plan: Database["public"]["Enums"]["subscription_plan"]
+          display_name: string | null
+          external_links: Json | null
+          id: string
+          message_style: Json | null
+          name_color: string | null
+          name_colors: Json | null
+          name_effect: string | null
+          social_links: Json | null
+          status_emoji: string | null
+          status_text: string | null
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          age_verified?: boolean | null
+          avatar_url?: string | null
+          banner_url?: string | null
+          bio?: string | null
+          bio_rich?: Json | null
+          birthdate?: string | null
+          created_at?: string
+          current_plan?: Database["public"]["Enums"]["subscription_plan"]
+          display_name?: string | null
+          external_links?: Json | null
+          id: string
+          message_style?: Json | null
+          name_color?: string | null
+          name_colors?: Json | null
+          name_effect?: string | null
+          social_links?: Json | null
+          status_emoji?: string | null
+          status_text?: string | null
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          age_verified?: boolean | null
+          avatar_url?: string | null
+          banner_url?: string | null
+          bio?: string | null
+          bio_rich?: Json | null
+          birthdate?: string | null
+          created_at?: string
+          current_plan?: Database["public"]["Enums"]["subscription_plan"]
+          display_name?: string | null
+          external_links?: Json | null
+          id?: string
+          message_style?: Json | null
+          name_color?: string | null
+          name_colors?: Json | null
+          name_effect?: string | null
+          social_links?: Json | null
+          status_emoji?: string | null
+          status_text?: string | null
+          updated_at?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      server_events: {
+        Row: {
+          cover_url: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          ends_at: string | null
+          id: string
+          server_id: string
+          starts_at: string
+          title: string
+        }
+        Insert: {
+          cover_url?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          ends_at?: string | null
+          id?: string
+          server_id: string
+          starts_at: string
+          title: string
+        }
+        Update: {
+          cover_url?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          ends_at?: string | null
+          id?: string
+          server_id?: string
+          starts_at?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "server_events_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      server_member_roles: {
+        Row: {
+          member_id: string
+          role_id: string
+        }
+        Insert: {
+          member_id: string
+          role_id: string
+        }
+        Update: {
+          member_id?: string
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "server_member_roles_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "server_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "server_member_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "server_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      server_members: {
+        Row: {
+          id: string
+          joined_at: string
+          level: number
+          nickname: string | null
+          server_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          level?: number
+          nickname?: string | null
+          server_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          level?: number
+          nickname?: string | null
+          server_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "server_members_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      server_roles: {
+        Row: {
+          color: string | null
+          created_at: string
+          gif_tag_url: string | null
+          id: string
+          level: number
+          name: string
+          permissions: Json
+          server_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          gif_tag_url?: string | null
+          id?: string
+          level: number
+          name: string
+          permissions?: Json
+          server_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          gif_tag_url?: string | null
+          id?: string
+          level?: number
+          name?: string
+          permissions?: Json
+          server_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "server_roles_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      servers: {
+        Row: {
+          banner_url: string | null
+          created_at: string
+          description: string | null
+          focus_tags: string[] | null
+          icon_url: string | null
+          id: string
+          member_count: number
+          min_age: number | null
+          name: string
+          owner_id: string
+          privacy: Database["public"]["Enums"]["server_privacy"]
+          slug: string | null
+          template: string | null
+          updated_at: string
+        }
+        Insert: {
+          banner_url?: string | null
+          created_at?: string
+          description?: string | null
+          focus_tags?: string[] | null
+          icon_url?: string | null
+          id?: string
+          member_count?: number
+          min_age?: number | null
+          name: string
+          owner_id: string
+          privacy?: Database["public"]["Enums"]["server_privacy"]
+          slug?: string | null
+          template?: string | null
+          updated_at?: string
+        }
+        Update: {
+          banner_url?: string | null
+          created_at?: string
+          description?: string | null
+          focus_tags?: string[] | null
+          icon_url?: string | null
+          id?: string
+          member_count?: number
+          min_age?: number | null
+          name?: string
+          owner_id?: string
+          privacy?: Database["public"]["Enums"]["server_privacy"]
+          slug?: string | null
+          template?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sticker_packs: {
+        Row: {
+          created_at: string
+          id: string
+          is_pro_only: boolean | null
+          name: string
+          owner_id: string | null
+          server_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_pro_only?: boolean | null
+          name: string
+          owner_id?: string | null
+          server_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_pro_only?: boolean | null
+          name?: string
+          owner_id?: string | null
+          server_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sticker_packs_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stickers: {
+        Row: {
+          id: string
+          name: string
+          pack_id: string
+          url: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          pack_id: string
+          url: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          pack_id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stickers_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "sticker_packs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscriptions: {
+        Row: {
+          amount_cents: number | null
+          contact_method: string | null
+          contact_value: string | null
+          created_at: string
+          ends_at: string | null
+          id: string
+          notes: string | null
+          plan: Database["public"]["Enums"]["subscription_plan"]
+          reviewed_at: string | null
+          reviewed_by: string | null
+          starts_at: string | null
+          status: Database["public"]["Enums"]["subscription_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_cents?: number | null
+          contact_method?: string | null
+          contact_value?: string | null
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          notes?: string | null
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number | null
+          contact_method?: string | null
+          contact_value?: string | null
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          notes?: string | null
+          plan?: Database["public"]["Enums"]["subscription_plan"]
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          granted_at: string
+          granted_by: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      current_plan: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["subscription_plan"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_server_member: {
+        Args: { _server: string; _user: string }
+        Returns: boolean
+      }
+      server_member_level: {
+        Args: { _server: string; _user: string }
+        Returns: number
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "user" | "admin" | "coo" | "ceo"
+      channel_type: "text" | "voice" | "announcement" | "rules" | "forum"
+      server_privacy: "public" | "private" | "invite_only"
+      subscription_plan: "free" | "pro"
+      subscription_status: "pending" | "active" | "canceled" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +755,12 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["user", "admin", "coo", "ceo"],
+      channel_type: ["text", "voice", "announcement", "rules", "forum"],
+      server_privacy: ["public", "private", "invite_only"],
+      subscription_plan: ["free", "pro"],
+      subscription_status: ["pending", "active", "canceled", "rejected"],
+    },
   },
 } as const
