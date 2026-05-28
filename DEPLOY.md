@@ -32,7 +32,7 @@ No painel do serviço, em **Environment**, configure (todas marcadas como `sync:
 ### c) Build & Start
 Já vem do `render.yaml`:
 - **Build**: `npm install && NITRO_PRESET=node-server npm run build`
-- **Start**: `node server.node.mjs`
+- **Start**: `node render/server.node.mjs`
 - **Health check**: `/health`
 
 A URL final fica algo como `https://panela-app.onrender.com`.
