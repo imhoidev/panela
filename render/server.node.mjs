@@ -9,7 +9,7 @@ import { Server as IOServer } from "socket.io";
 
 // Nitro's node-server preset emits a request listener at .output/server/index.mjs.
 // We import it dynamically so the file can sit at the repo root.
-const nitroEntry = await import("./.output/server/index.mjs");
+const nitroEntry = await import("../.output/server/index.mjs");
 const nitroHandler =
   nitroEntry.handler ?? nitroEntry.default?.handler ?? nitroEntry.default;
 

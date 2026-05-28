@@ -5,7 +5,7 @@ services:
     plan: starter
     region: oregon
     buildCommand: npm install && NITRO_PRESET=node-server npm run build
-    startCommand: node server.node.mjs
+    startCommand: node render/server.node.mjs
     healthCheckPath: /health
     autoDeploy: true
     envVars:

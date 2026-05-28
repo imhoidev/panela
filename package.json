@@ -8,7 +8,7 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "build:render": "NITRO_PRESET=node-server vite build",
-    "start:render": "node server.node.mjs",
+    "start:render": "node render/server.node.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write ."

@@ -1,5 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "echo 'Vercel only serves redirects — actual app is on Render'",
+  "outputDirectory": ".vercel-static",
+  "installCommand": "echo skip",
+  "framework": null,
   "redirects": [
     {
       "source": "/:path*",
