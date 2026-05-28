@@ -9,6 +9,8 @@ import { Loader2, PhoneOff, Phone, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
+const API_URL = import.meta.env.VITE_API_URL || "";
+
 type TokenRes = { token: string; url: string; identity: string; name: string };
 
 export function VoiceRoom({
@@ -24,7 +26,7 @@ export function VoiceRoom({
       const { data: sess } = await supabase.auth.getSession();
       const bearer = sess.session?.access_token;
       if (!bearer) throw new Error("Sem sessão");
-      const r = await fetch("/api/livekit/token", {
+      const r = await fetch(`${API_URL}/api/livekit/token`, {
         method: "POST",
         headers: { "content-type": "application/json", Authorization: `Bearer ${bearer}` },
         body: JSON.stringify({ room, channelId, name }),

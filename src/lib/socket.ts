@@ -1,6 +1,5 @@
-// Client wrapper for the Socket.io realtime layer hosted on Render.
-// Set VITE_REALTIME_URL to your Render service URL (e.g. https://panela-app.onrender.com).
-// Falls back to same-origin (works when the app is served from Render directly).
+// Client wrapper for the Socket.io realtime layer hosted on the backend.
+// Set VITE_REALTIME_URL to your backend URL (e.g. https://panela-backend.onrender.com).
 import { io, type Socket } from "socket.io-client";
 
 let socket: Socket | null = null;
