@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: panela-app
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install && NITRO_PRESET=node-server npm run build
+    startCommand: node server.node.mjs
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NITRO_PRESET
+        value: node-server
+      - key: PORT
+        value: 10000
+      # Configure these via the Render dashboard (sensitive):
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: VITE_SUPABASE_PROJECT_ID
+        sync: false
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      # Allowed Origin for Socket.io CORS (your Vercel URL)
+      - key: FRONTEND_ORIGIN
+        sync: false
