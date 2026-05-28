@@ -2,6 +2,7 @@ services:
   - type: web
     name: panela-backend
     runtime: node
+    rootDir: backend
     plan: starter
     region: oregon
     buildCommand: npm install
