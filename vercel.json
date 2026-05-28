@@ -1,6 +1,10 @@
 {
-  "framework": "nitro",
-  "outputDirectory": "dist",
-  "installCommand": "npm install",
-  "devCommand": "npm run dev"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "destination": "https://panela-app.onrender.com/:path*",
+      "permanent": false
+    }
+  ]
 }
