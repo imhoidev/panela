@@ -284,18 +284,44 @@ const io = new IOServer(server, {
   cors: { origin: FRONTEND_ORIGIN === "*" ? true : FRONTEND_ORIGIN.split(","), credentials: true },
 });
 
-const presence = new Map();
-const userStatus = new Map();
+const presence = new Map();        // userId -> { sockets: Set<socketId>, status, serverId }
+const userStatus = new Map();      // userId -> "online" | "idle" | "dnd" | "offline"
+const roomPresence = new Map();    // serverId -> Map<userId, status>
 
 io.on("connection", (socket) => {
   const { userId } = socket.handshake.auth ?? {};
   if (!userId) { socket.disconnect(true); return; }
 
-  if (!presence.has(userId)) presence.set(userId, { sockets: new Set(), status: "online" });
+  if (!presence.has(userId)) presence.set(userId, { sockets: new Set(), status: "online", serverId: null });
   const entry = presence.get(userId);
   entry.sockets.add(socket.id);
-  userStatus.set(userId, "online");
+  userStatus.set(userId, entry.status);
   io.emit("presence:update", { userId, status: entry.status });
+
+  // === PRESENCE:JOIN — join a server room with optional status ===
+  socket.on("presence:join", ({ userId: uid, serverId, status }) => {
+    if (uid !== userId) return;
+    const s = ["online", "idle", "dnd", "invisible"].includes(status) ? status : "online";
+    entry.status = s;
+    userStatus.set(userId, s);
+
+    // Leave previous server room
+    if (entry.serverId) {
+      socket.leave(`srv:${entry.serverId}`);
+      const prevRoom = roomPresence.get(entry.serverId);
+      if (prevRoom) { prevRoom.delete(userId); if (prevRoom.size === 0) roomPresence.delete(entry.serverId); }
+    }
+
+    entry.serverId = serverId;
+    if (serverId) {
+      socket.join(`srv:${serverId}`);
+      if (!roomPresence.has(serverId)) roomPresence.set(serverId, new Map());
+      roomPresence.get(serverId).set(userId, s);
+      // Broadcast full member list to the server room
+      const users = Array.from(roomPresence.get(serverId).entries()).map(([id, st]) => ({ userId: id, status: st }));
+      io.to(`srv:${serverId}`).emit("presence:users", users);
+    }
+  });
 
   socket.on("channel:join", (channelId) => { if (typeof channelId === "string") socket.join(`ch:${channelId}`); });
   socket.on("channel:leave", (channelId) => { if (typeof channelId === "string") socket.leave(`ch:${channelId}`); });
@@ -306,6 +332,12 @@ io.on("connection", (socket) => {
     if (!["online", "idle", "dnd", "invisible"].includes(status)) return;
     entry.status = status;
     userStatus.set(userId, status);
+    // Update in room presence
+    if (entry.serverId && roomPresence.has(entry.serverId)) {
+      roomPresence.get(entry.serverId).set(userId, status);
+      const users = Array.from(roomPresence.get(entry.serverId).entries()).map(([id, st]) => ({ userId: id, status: st }));
+      io.to(`srv:${entry.serverId}`).emit("presence:users", users);
+    }
     io.emit("presence:update", { userId, status });
   });
 
@@ -319,6 +351,11 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     entry.sockets.delete(socket.id);
     if (entry.sockets.size === 0) {
+      if (entry.serverId && roomPresence.has(entry.serverId)) {
+        roomPresence.get(entry.serverId).delete(userId);
+        const users = Array.from(roomPresence.get(entry.serverId).entries()).map(([id, st]) => ({ userId: id, status: st }));
+        io.to(`srv:${entry.serverId}`).emit("presence:users", users);
+      }
       presence.delete(userId);
       userStatus.delete(userId);
       io.emit("presence:update", { userId, status: "offline" });

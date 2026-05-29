@@ -19,6 +19,7 @@ import { InvitesDialog } from "@/components/Invites";
 import { ThemeDialog } from "@/components/ThemeConfig";
 import { BanDialog } from "@/components/ModPanel";
 import { LevelBadge } from "@/components/LevelBadge";
+import { StatusDot } from "@/components/PresenceStatus";
 import { getSocket } from "@/lib/socket";
 import {
   Hash, Plus, Settings, LogOut, Volume2, Menu, Users, Copy, AtSign, Check, Shield,
@@ -45,7 +46,7 @@ function ServerLayout() {
   const [newType, setNewType] = useState<"text" | "voice" | "announcement">("text");
   const [newCategory, setNewCategory] = useState("");
   const [mobileChannelsOpen, setMobileChannelsOpen] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [presence, setPresence] = useState<Map<string, string>>(new Map());
   const [members, setMembers] = useState<any[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -55,7 +56,11 @@ function ServerLayout() {
   useEffect(() => {
     if (!user) return;
     const s = getSocket(user.id);
-    const onUsers = (users: { userId: string; name: string }[]) => setOnlineUsers(new Set(users.map((u) => u.userId)));
+    const onUsers = (users: { userId: string; status: string }[]) => {
+      const m = new Map<string, string>();
+      users.forEach((u) => m.set(u.userId, u.status || "online"));
+      setPresence(m);
+    };
     s.on("presence:users", onUsers);
     s.on("connect", () => s.emit("presence:join", { userId: user.id, serverId }));
     return () => { s.off("presence:users"); s.off("connect"); s.disconnect(); };
@@ -212,7 +217,7 @@ function ServerLayout() {
           <Outlet />
           {memberLevel > 0 && (
             <div className="hidden lg:block">
-              <MemberList serverId={serverId} onlineUsers={onlineUsers} />
+              <MemberList serverId={serverId} presence={presence} />
             </div>
           )}
         </div>
@@ -232,7 +237,7 @@ function ServerLayout() {
             memberSearch={memberSearch}
             setMemberSearch={setMemberSearch}
             kickMember={kickMember}
-            onlineUsers={onlineUsers}
+            presence={presence}
             onServerUpdate={(s: any) => setServer(s)}
           />
         </DialogContent>
@@ -355,7 +360,7 @@ function ChannelItem({ c, serverId, loc, canManage, deleteChannel }: any) {
 
 function ServerSettingsPanel({
   server, serverId, isOwner, canManage, canKick, members, memberSearch, setMemberSearch,
-  kickMember, onlineUsers, onServerUpdate,
+  kickMember, presence, onServerUpdate,
 }: any) {
   const [tab, setTab] = useState("overview");
   const [editName, setEditName] = useState(server.name);
@@ -436,7 +441,7 @@ function ServerSettingsPanel({
             <div className="space-y-1">
               {filteredMembers.map((m: any) => {
                 const p = m.profiles;
-                const online = onlineUsers.has(m.user_id);
+                const online = presence.has(m.user_id);
                 return (
                   <div key={m.user_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/30">
                     <Avatar className="h-9 w-9">
@@ -445,7 +450,7 @@ function ServerSettingsPanel({
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className={`h-2 w-2 rounded-full ${online ? "bg-emerald-500" : "bg-muted-foreground/30"}`} />
+                        <StatusDot status={online ? (presence.get(m.user_id) || "online") : "offline"} />
                         <p className="text-sm font-medium truncate">{p?.display_name || p?.username}</p>
                         {m.user_id === server.owner_id && <Crown className="h-3.5 w-3.5 text-gold" />}
                       </div>

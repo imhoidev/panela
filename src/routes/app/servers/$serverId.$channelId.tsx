@@ -44,7 +44,7 @@ function ChannelView() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [typing, setTyping] = useState<Record<string, { name: string; t: number }>>({});
-  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [presence, setPresence] = useState<Map<string, string>>(new Map());
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState<Msg | null>(null);
@@ -169,7 +169,11 @@ function ChannelView() {
       s.emit("presence:join", { userId: user.id, serverId });
       if (channelId) s.emit("channel:join", channelId);
     };
-    const onUsers = (users: { userId: string; name: string }[]) => setOnlineUsers(new Set(users.map((u) => u.userId)));
+    const onUsers = (users: { userId: string; status: string }[]) => {
+      const m = new Map<string, string>();
+      users.forEach((u) => m.set(u.userId, u.status || "online"));
+      setPresence(m);
+    };
     const onTypingStart = ({ userId: uid, username }: { userId: string; username: string }) => {
       if (uid === user.id) return;
       setTyping((prev) => ({ ...prev, [uid]: { name: username, t: Date.now() } }));
@@ -297,16 +301,16 @@ function ChannelView() {
               <Button variant="ghost" size="sm" className="h-7 gap-1 text-muted-foreground lg:hidden">
                 <Users className="h-3.5 w-3.5" />
                 <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-                {onlineUsers.size}
+                {Array.from(presence.values()).filter((s) => s !== "offline").length}
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="p-0 w-[280px]">
-              <MemberList serverId={serverId} onlineUsers={onlineUsers} />
+              <MemberList serverId={serverId} presence={presence} />
             </SheetContent>
           </Sheet>
           <span className="hidden lg:inline-flex items-center gap-1">
             <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-            {onlineUsers.size}
+            {Array.from(presence.values()).filter((s) => s !== "offline").length}
           </span>
         </div>
       </header>

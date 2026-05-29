@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
+import { StatusPicker, StatusDot } from "@/components/PresenceStatus";
 import {
-  Bell, BellOff, Loader2, Copy, LogOut, User, Shield, MessageSquare,
   Info, Check,
 } from "lucide-react";
 
@@ -65,6 +65,13 @@ function Settings() {
         <Link to="/app/profile" className="block">
           <Button variant="outline" className="w-full mt-1">Perfil completo →</Button>
         </Link>
+      </Card>
+
+      {/* Presence Status */}
+      <Card className="p-5 space-y-2">
+        <h2 className="font-semibold flex items-center gap-2"><StatusDot status={profile?.status || "online"} size="lg" /> Presença</h2>
+        <p className="text-sm text-muted-foreground">Sua disponibilidade atual aparece para todos nos servidores.</p>
+        <StatusPicker currentStatus={profile?.status} />
       </Card>
 
       {/* Account */}

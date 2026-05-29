@@ -4,6 +4,7 @@ import { PanelaLogo } from "./PanelaLogo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { StatusPicker } from "./PresenceStatus";
 import {
   Home, Users, Settings, Crown, LogOut, Sparkles, Compass, Plus, Hash, Menu, Search,
   MessageSquare,
@@ -154,9 +155,15 @@ function NavBlock({
         )}
       </nav>
       <div className="p-3 border-t border-sidebar-border flex items-center gap-2">
-        <Avatar className="h-9 w-9"><AvatarImage src={profile?.avatar_url ?? undefined} /><AvatarFallback>{profile?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback></Avatar>
+        <Avatar className="h-9 w-9">
+          <AvatarImage src={profile?.avatar_url ?? undefined} />
+          <AvatarFallback>{profile?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
+        </Avatar>
         <div className="flex-1 min-w-0">
-          <div className="truncate text-sm font-medium">{profile?.display_name || profile?.username}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-medium">{profile?.display_name || profile?.username}</span>
+            <StatusPicker currentStatus={profile?.status} />
+          </div>
           <div className="truncate text-xs text-muted-foreground">@{profile?.username}</div>
         </div>
         <Button size="icon" variant="ghost" onClick={onSignOut} title="Sair">
