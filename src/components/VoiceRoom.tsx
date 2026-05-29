@@ -177,7 +177,7 @@ function StageInner({
 
   if (all.length <= 2) {
     return (
-      <div className="h-full flex flex-col gap-3 sm:grid sm:grid-cols-2 sm:grid-rows-1">
+      <div className="h-full flex flex-col gap-2 sm:grid sm:grid-cols-2 sm:grid-rows-1">
         {all.map((p) => (
           <ParticipantTileBtn key={p.identity} participant={p} onClick={onFocus} />
         ))}
@@ -185,11 +185,14 @@ function StageInner({
     );
   }
 
+  const cols = all.length <= 4 ? "repeat(auto-fill, minmax(160px, 1fr))" : "repeat(auto-fill, minmax(200px, 1fr))";
+  const rows = all.length <= 4 ? "minmax(140px, auto)" : "minmax(160px, auto)";
+
   return (
-    <div className="h-full grid gap-3"
+    <div className="h-full grid gap-2 sm:gap-3"
       style={{
-        gridTemplateColumns: `repeat(auto-fill, minmax(240px, 1fr))`,
-        gridAutoRows: "minmax(180px, auto)",
+        gridTemplateColumns: cols,
+        gridAutoRows: rows,
       }}>
       {all.map((p) => (
         <ParticipantTileBtn key={p.identity} participant={p} onClick={onFocus} />

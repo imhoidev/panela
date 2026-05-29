@@ -10,14 +10,16 @@ import { UsernameBadge } from "@/components/UsernameBadge";
 import { VoiceRoom } from "@/components/VoiceRoom";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { GifPicker } from "@/components/GifPicker";
 import { StickerPicker } from "@/components/StickerPicker";
 import { ReportDialog } from "@/components/ModPanel";
+import { MemberList } from "@/components/MemberList";
 import { getSocket } from "@/lib/socket";
 import { toast } from "sonner";
 import {
   Hash, SendHorizontal, Smile, CornerUpLeft, X, Trash2, Pencil, Check, Volume2, ArrowLeft,
-  Paperclip, MessageSquare, Image,
+  Paperclip, MessageSquare, Users,
 } from "lucide-react";
 
 const EMOJIS = ["👍", "❤️", "🔥", "😂", "🥹", "🤝", "👀", "🎉", "💯", "🍳"];
@@ -290,8 +292,22 @@ function ChannelView() {
         <h2 className="font-semibold truncate">{channel.name}</h2>
         {channel.topic && <span className="text-sm text-muted-foreground border-l border-border pl-3 ml-1 truncate hidden sm:inline">{channel.topic}</span>}
         <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-          {onlineUsers.size}
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-7 gap-1 text-muted-foreground lg:hidden">
+                <Users className="h-3.5 w-3.5" />
+                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                {onlineUsers.size}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="p-0 w-[280px]">
+              <MemberList serverId={serverId} onlineUsers={onlineUsers} />
+            </SheetContent>
+          </Sheet>
+          <span className="hidden lg:inline-flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+            {onlineUsers.size}
+          </span>
         </div>
       </header>
 

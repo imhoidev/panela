@@ -197,3 +197,22 @@
 /* Server theme variables (set via JS on .server-theme) */
 .server-theme { --primary: var(--server-accent); --background: var(--server-bg); }
 .server-theme.light { --background: oklch(0.95 0.01 80); --foreground: oklch(0.15 0.02 80); }
+
+/* ============ Responsive utilities ============ */
+@media (max-width: 640px) {
+  .hide-on-mobile { display: none !important; }
+  .message-toolbar { right: 0.25rem !important; top: -2rem !important; }
+  .message-toolbar button { width: 1.75rem !important; height: 1.75rem !important; }
+}
+@media (min-width: 641px) {
+  .show-on-mobile-only { display: none !important; }
+}
+
+/* Smooth touch scrolling */
+.touch-pan-y { -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  .fx-glow, .fx-rainbow, .fx-typing { animation: none !important; }
+}

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   Home, Users, Settings, Crown, LogOut, Sparkles, Compass, Plus, Hash, Menu, Search,
+  MessageSquare,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +16,7 @@ type ServerLite = { id: string; name: string; icon_url: string | null };
 const NAV = [
   { to: "/app", label: "Início", icon: Home },
   { to: "/app/servers", label: "Panelas", icon: Hash },
+  { to: "/app/dms", label: "DMs", icon: MessageSquare },
   { to: "/app/discover", label: "Descobrir", icon: Compass },
   { to: "/app/profile", label: "Perfil", icon: Users },
   { to: "/app/plans", label: "Planos", icon: Sparkles },
@@ -97,11 +99,17 @@ export function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
 
-        {/* Bottom nav — MOBILE (esconde quando dentro de canal, pra dar espaço à composer) */}
-        {!loc.pathname.match(/^\/app\/servers\/[^/]+\/[^/]+$/) && (
-          <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-sidebar/95 backdrop-blur pb-safe">
+        {/* Bottom nav — MOBILE (esconde quando dentro de canal/chat, pra dar espaço à composer) */}
+        {!loc.pathname.match(/^\/app\/servers\/[^/]+\/[^/]+$/) && !loc.pathname.match(/^\/app\/dms\/[^/]+$/) && (
+          <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-sidebar/95 backdrop-blur pb-safe shadow-2xl shadow-black/30">
             <ul className="grid grid-cols-5">
-              {NAV.filter((n) => ["/app", "/app/servers", "/app/discover", "/app/profile", "/app/settings"].includes(n.to)).map((it) => {
+              {[
+                { to: "/app", label: "Início", icon: Home },
+                { to: "/app/servers", label: "Panelas", icon: Hash },
+                { to: "/app/dms", label: "DMs", icon: MessageSquare },
+                { to: "/app/discover", label: "+", icon: Compass },
+                { to: "/app/settings", label: "Ajustes", icon: Settings },
+              ].map((it) => {
                 const active = loc.pathname === it.to || (it.to !== "/app" && loc.pathname.startsWith(it.to));
                 return (
                   <li key={it.to}>

@@ -1,12 +1,17 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
-import { Bell, BellOff, Loader2 } from "lucide-react";
+import {
+  Bell, BellOff, Loader2, Copy, LogOut, User, Shield, MessageSquare,
+  Info, Check,
+} from "lucide-react";
 
 export const Route = createFileRoute("/app/settings")({
   head: () => ({ meta: [{ title: "Configurações — PANELA" }] }),
@@ -15,47 +20,104 @@ export const Route = createFileRoute("/app/settings")({
 
 function Settings() {
   const { user, profile, roles, signOut } = useAuth();
+  const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
+  const [statusText, setStatusText] = useState(profile?.status_text ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  async function copyId() {
-    if (!user) return;
-    await navigator.clipboard.writeText(user.id);
-    toast.success("ID copiado");
+  useEffect(() => {
+    setDisplayName(profile?.display_name ?? "");
+    setStatusText(profile?.status_text ?? "");
+  }, [profile]);
+
+  async function saveProfile() {
+    setSaving(true);
+    const { error } = await supabase.from("profiles").update({
+      display_name: displayName.trim() || null,
+      status_text: statusText.trim() || null,
+    }).eq("id", user!.id);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+    toast.success("Perfil atualizado!");
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6 md:p-10 space-y-6">
+    <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-5">
       <h1 className="text-2xl font-bold">Configurações</h1>
 
-      <Card className="p-5 space-y-2">
-        <h2 className="font-semibold">Conta</h2>
-        <p className="text-sm text-muted-foreground">Email: {user?.email}</p>
-        <p className="text-sm text-muted-foreground">Username: @{profile?.username}</p>
-        <p className="text-sm text-muted-foreground">Plano: <span className="uppercase">{profile?.current_plan}</span></p>
-        <div className="text-sm flex items-center gap-2 flex-wrap">Cargos:
-          {roles.length === 0 ? <Badge variant="outline">user</Badge> : roles.map((r) => <Badge key={r} variant={r === "ceo" ? "destructive" : "secondary"}>{r}</Badge>)}
+      {/* Profile quick edit */}
+      <Card className="p-5 space-y-3">
+        <h2 className="font-semibold flex items-center gap-2"><User className="h-4 w-4 text-primary" /> Perfil Rápido</h2>
+        <div className="space-y-1.5">
+          <Label>Nome de exibição</Label>
+          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={32} placeholder="Seu nome" />
         </div>
-        <div className="pt-2 flex gap-2">
-          <Button variant="outline" onClick={copyId}>Copiar meu ID</Button>
-          <Button variant="destructive" onClick={signOut}>Sair</Button>
+        <div className="space-y-1.5">
+          <Label>Status</Label>
+          <Input value={statusText} onChange={(e) => setStatusText(e.target.value)} maxLength={80} placeholder="O que você está fazendo?" />
+        </div>
+        <Button onClick={saveProfile} disabled={saving} className="gap-1.5">
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <Check className="h-4 w-4" /> : null}
+          {saving ? "Salvando..." : saved ? "Salvo!" : "Salvar perfil"}
+        </Button>
+        <Link to="/app/profile" className="block">
+          <Button variant="outline" className="w-full mt-1">Perfil completo →</Button>
+        </Link>
+      </Card>
+
+      {/* Account */}
+      <Card className="p-5 space-y-2">
+        <h2 className="font-semibold flex items-center gap-2"><Shield className="h-4 w-4 text-primary" /> Conta</h2>
+        <div className="grid sm:grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-muted-foreground text-xs">Email</p>
+            <p>{user?.email}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs">Username</p>
+            <p>@{profile?.username}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs">Plano</p>
+            <Badge variant="outline" className="uppercase">{profile?.current_plan}</Badge>
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs">Cargos</p>
+            <div className="flex gap-1 flex-wrap mt-0.5">
+              {roles.length === 0 ? <Badge variant="outline">user</Badge> : roles.map((r) => <Badge key={r} variant={r === "ceo" ? "destructive" : "secondary"}>{r}</Badge>)}
+            </div>
+          </div>
+        </div>
+        <div className="pt-2 flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={async () => { if (!user) return; await navigator.clipboard.writeText(user.id); toast.success("ID copiado!"); }} className="gap-1.5">
+            <Copy className="h-3.5 w-3.5" /> Copiar ID
+          </Button>
+          <Button variant="destructive" size="sm" onClick={signOut} className="gap-1.5">
+            <LogOut className="h-3.5 w-3.5" /> Sair
+          </Button>
         </div>
       </Card>
 
+      {/* Direct Messages Info */}
       <Card className="p-5 space-y-2">
-        <h2 className="font-semibold">Roadmap</h2>
-        <ol className="text-sm space-y-1 list-decimal pl-5 text-muted-foreground">
-          <li><b className="text-foreground">MVP (agora):</b> Auth, perfis, cargos globais, planos PRO manuais.</li>
-          <li><b className="text-foreground">Fase 2:</b> Servidores, canais, cargos internos, descoberta.</li>
-          <li><b className="text-foreground">Fase 3:</b> Chat realtime, reações, threads, stickers.</li>
-          <li><b className="text-foreground">Fase 4:</b> Voz/vídeo/screen-share via LiveKit, chamadas em grupo.</li>
-          <li><b className="text-foreground">Fase 5:</b> Push notifications (VAPID), AutoMod, eventos, PWA completo.</li>
-        </ol>
+        <h2 className="font-semibold flex items-center gap-2"><MessageSquare className="h-4 w-4 text-primary" /> Mensagens Diretas</h2>
+        <p className="text-sm text-muted-foreground">Inicie conversas privadas com outros membros clicando em "Mensagem" no perfil deles.</p>
+        <Link to="/app/dms">
+          <Button variant="outline" size="sm" className="gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> Ver mensagens</Button>
+        </Link>
       </Card>
 
       <PushNotificationsCard />
 
       <Card className="p-5 space-y-2">
-        <h2 className="font-semibold">Sobre o PANELA</h2>
-        <p className="text-sm text-muted-foreground">PANELA é uma plataforma social de comunidades com sabor de fórum 2008 e velocidade de 2026. Construído com carinho.</p>
+        <h2 className="font-semibold flex items-center gap-2"><Info className="h-4 w-4 text-primary" /> Sobre o PANELA</h2>
+        <p className="text-sm text-muted-foreground">PANELA é uma plataforma social de comunidades com sabor de fórum 2008 e velocidade de 2026. Versão 3.0 — com DMs, temas, cargos, eventos e muito mais.</p>
+        <div className="text-xs text-muted-foreground/60 pt-1">
+          <p>Feito com React 19 + TanStack Start + Supabase + LiveKit + Socket.io</p>
+          <p>Deploy: Vercel (frontend) · Render (backend)</p>
+        </div>
       </Card>
     </div>
   );

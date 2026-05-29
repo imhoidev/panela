@@ -33,8 +33,8 @@ export function MemberList({ serverId, onlineUsers }: { serverId: string; online
   const offline = sorted.filter((m) => !onlineUsers.has(m.user_id));
 
   return (
-    <div className="w-56 border-l border-border bg-card/30 flex flex-col">
-      <div className="h-12 border-b border-border flex items-center px-3 gap-2 text-sm font-medium text-muted-foreground">
+    <div className="w-56 border-l border-border bg-card/30 flex-col flex min-h-0">
+      <div className="h-12 border-b border-border flex items-center px-3 gap-2 text-sm font-medium text-muted-foreground shrink-0">
         <Users className="h-4 w-4" /> Membros — {sorted.length}
       </div>
       <ScrollArea className="flex-1 p-2">
