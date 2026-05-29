@@ -1,5 +1,7 @@
 import { createFileRoute, useParams, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
@@ -7,18 +9,22 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UsernameBadge } from "@/components/UsernameBadge";
 import { VoiceRoom } from "@/components/VoiceRoom";
 import { Button } from "@/components/ui/button";
-import { getSocket, disconnectSocket } from "@/lib/socket";
-import {
-  Hash, SendHorizontal, Smile, CornerUpLeft, X, Trash2, Pencil, Check, Volume2, ArrowLeft, Paperclip,
-} from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { GifPicker } from "@/components/GifPicker";
+import { StickerPicker } from "@/components/StickerPicker";
+import { ReportDialog } from "@/components/ModPanel";
+import { getSocket } from "@/lib/socket";
 import { toast } from "sonner";
+import {
+  Hash, SendHorizontal, Smile, CornerUpLeft, X, Trash2, Pencil, Check, Volume2, ArrowLeft,
+  Paperclip, MessageSquare, Image,
+} from "lucide-react";
 
 const EMOJIS = ["👍", "❤️", "🔥", "😂", "🥹", "🤝", "👀", "🎉", "💯", "🍳"];
 
 type Msg = {
   id: string; content: string | null; created_at: string; author_id: string; channel_id: string;
-  reply_to: string | null; edited_at: string | null;
+  reply_to: string | null; edited_at: string | null; thread_root: string | null;
   attachment_url: string | null; attachment_type: string | null;
   author?: { username: string; display_name: string | null; avatar_url: string | null; name_color: string | null; name_colors: any; name_effect: string | null; current_plan: string } | null;
 };
@@ -43,12 +49,16 @@ function ChannelView() {
   const [editing, setEditing] = useState<Msg | null>(null);
   const [editText, setEditText] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const profilesCache = useRef<Map<string, Msg["author"]>>(new Map());
   const typingChan = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const sockRef = useRef<ReturnType<typeof getSocket> | null>(null);
   const lastTypingSent = useRef(0);
+  const prevScrollHeight = useRef(0);
 
   async function fetchProfile(uid: string): Promise<Msg["author"]> {
     if (profilesCache.current.has(uid)) return profilesCache.current.get(uid)!;
@@ -63,7 +73,7 @@ function ChannelView() {
     if (!c || c.type === "voice") { setMessages([]); setReactions([]); return; }
 
     const { data: msgs } = await supabase.from("messages")
-      .select("*").eq("channel_id", channelId).order("created_at", { ascending: true }).limit(100);
+      .select("*").eq("channel_id", channelId).is("thread_root", null).order("created_at", { ascending: true }).limit(100);
     const list = (msgs ?? []) as Msg[];
     const authors = Array.from(new Set(list.map((m) => m.author_id)));
     if (authors.length) {
@@ -72,6 +82,7 @@ function ChannelView() {
     }
     list.forEach((m) => { m.author = profilesCache.current.get(m.author_id) ?? null; });
     setMessages(list);
+    setHasMore(list.length >= 100);
 
     if (list.length) {
       const ids = list.map((m) => m.id);
@@ -82,6 +93,38 @@ function ChannelView() {
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }));
   }
 
+  // Infinite scroll: load older messages
+  useEffect(() => {
+    if (!hasMore || !sentinelRef.current) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting || loadingMore || !hasMore) return;
+      setLoadingMore(true);
+      const oldest = messages[0];
+      prevScrollHeight.current = scrollRef.current?.scrollHeight || 0;
+      supabase.from("messages")
+        .select("*").eq("channel_id", channelId).is("thread_root", null)
+        .lt("created_at", oldest.created_at).order("created_at", { ascending: false }).limit(50)
+        .then(async ({ data }) => {
+          const older = (data ?? []).reverse() as Msg[];
+          if (older.length < 50) setHasMore(false);
+          if (!older.length) { setLoadingMore(false); return; }
+          const authors = Array.from(new Set(older.map((m) => m.author_id)));
+          if (authors.length) {
+            const { data: profs } = await supabase.from("profiles").select("id,username,display_name,avatar_url,name_color,name_colors,name_effect,current_plan").in("id", authors);
+            (profs ?? []).forEach((p: any) => profilesCache.current.set(p.id, p));
+          }
+          older.forEach((m) => { m.author = profilesCache.current.get(m.author_id) ?? null; });
+          setMessages((prev) => [...older, ...prev]);
+          setLoadingMore(false);
+          requestAnimationFrame(() => {
+            if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight - prevScrollHeight.current;
+          });
+        });
+    }, { rootMargin: "200px" });
+    if (sentinelRef.current) obs.observe(sentinelRef.current);
+    return () => obs.disconnect();
+  }, [hasMore, loadingMore, messages.length, channelId]);
+
   useEffect(() => { setMessages([]); setReactions([]); setReplyTo(null); setEditing(null); load(); }, [channelId]);
 
   // Realtime: mensagens + reações (via Supabase)
@@ -91,6 +134,7 @@ function ChannelView() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `channel_id=eq.${channelId}` },
         async (payload) => {
           const m = payload.new as Msg;
+          if (m.thread_root) return; // threads are loaded separately
           m.author = await fetchProfile(m.author_id);
           setMessages((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m]);
           requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }));
@@ -173,9 +217,8 @@ function ChannelView() {
     setSending(true);
     const content = text.trim();
     setText(""); const reply = replyTo?.id ?? null; setReplyTo(null);
-    const { error } = await supabase.from("messages").insert({ channel_id: channelId, author_id: user.id, content, reply_to: reply });
+    await supabase.from("messages").insert({ channel_id: channelId, author_id: user.id, content, reply_to: reply });
     setSending(false);
-    if (error) { setText(content); toast.error(error.message); }
   }
 
   async function react(msg: Msg, emoji: string) {
@@ -190,16 +233,14 @@ function ChannelView() {
 
   async function removeMsg(m: Msg) {
     if (!confirm("Apagar essa mensagem?")) return;
-    const { error } = await supabase.from("messages").delete().eq("id", m.id);
-    if (error) toast.error(error.message);
+    await supabase.from("messages").delete().eq("id", m.id);
   }
 
   async function saveEdit() {
     if (!editing) return;
     const content = editText.trim();
     if (!content) return;
-    const { error } = await supabase.from("messages").update({ content, edited_at: new Date().toISOString() }).eq("id", editing.id);
-    if (error) return toast.error(error.message);
+    await supabase.from("messages").update({ content, edited_at: new Date().toISOString() }).eq("id", editing.id);
     setEditing(null);
   }
 
@@ -227,13 +268,21 @@ function ChannelView() {
     }
   }
 
+  function insertGif(url: string) {
+    setText((prev) => prev + ` ![gif](${url}) `);
+  }
+
+  function insertSticker(url: string) {
+    setText((prev) => prev + ` ![sticker](${url}) `);
+  }
+
   if (!channel) return <div className="p-8 text-muted-foreground">Carregando canal…</div>;
 
   const isVoice = channel.type === "voice";
 
   return (
     <div className="flex flex-col h-full">
-      <header className="h-12 border-b border-border px-3 sm:px-4 flex items-center gap-2 bg-card/30 backdrop-blur">
+      <header className="h-12 border-b border-border px-3 sm:px-4 flex items-center gap-2 bg-card/30 backdrop-blur shrink-0">
         <Link to="/app/servers/$serverId" params={{ serverId }} className="md:hidden">
           <Button variant="ghost" size="icon" className="h-8 w-8"><ArrowLeft className="h-4 w-4" /></Button>
         </Link>
@@ -253,7 +302,11 @@ function ChannelView() {
       ) : (
         <>
           <div ref={scrollRef} className="flex-1 overflow-auto px-2 sm:px-4 py-3 space-y-0.5">
-            {messages.length === 0 && (
+            {/* Infinite scroll sentinel */}
+            {hasMore && <div ref={sentinelRef} className="h-4" />}
+            {loadingMore && <p className="text-xs text-muted-foreground text-center py-2">Carregando mais…</p>}
+
+            {messages.length === 0 && !loadingMore && (
               <div className="text-center text-muted-foreground py-12">
                 <Hash className="h-10 w-10 mx-auto mb-3 opacity-40" />
                 <p className="font-medium">Bem-vindo a #{channel.name}</p>
@@ -268,10 +321,13 @@ function ChannelView() {
               return (
                 <div key={m.id} className={`group relative flex gap-3 hover:bg-accent/30 px-2 py-0.5 rounded ${sameAuthor ? "pl-13" : "pt-2"}`}>
                   {!sameAuthor ? (
-                    <Avatar className="h-10 w-10 mt-0.5 shrink-0">
-                      <AvatarImage src={m.author?.avatar_url ?? undefined} />
-                      <AvatarFallback>{(m.author?.username ?? "?")[0]?.toUpperCase()}</AvatarFallback>
-                    </Avatar>
+                    <Link to="/app/profile/$userId" params={{ userId: m.author_id }}
+                      className="h-10 w-10 mt-0.5 shrink-0 rounded-full overflow-hidden hover:ring-2 ring-primary/60 transition-all">
+                      <Avatar className="h-full w-full">
+                        <AvatarImage src={m.author?.avatar_url ?? undefined} />
+                        <AvatarFallback>{(m.author?.username ?? "?")[0]?.toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                    </Link>
                   ) : <div className="w-10 shrink-0" />}
                   <div className="min-w-0 flex-1">
                     {replied && (
@@ -293,15 +349,23 @@ function ChannelView() {
                       </div>
                     ) : (
                       <div>
-                        <p className="text-sm whitespace-pre-wrap break-words">
-                          {m.content}
-                          {m.edited_at && <span className="text-[10px] text-muted-foreground ml-1">(editado)</span>}
-                        </p>
+                        {m.content && (
+                          <div className="text-sm prose prose-sm prose-invert max-w-none prose-p:my-0.5 prose-headings:my-1 prose-pre:bg-muted prose-code:text-primary prose-a:text-primary prose-img:rounded-lg">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {m.content}
+                            </ReactMarkdown>
+                          </div>
+                        )}
+                        {m.edited_at && <span className="text-[10px] text-muted-foreground ml-1">(editado)</span>}
                         {m.attachment_url && (
                           <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"
                             className="mt-1.5 inline-flex items-center gap-2 rounded-lg border border-border bg-accent/30 px-3 py-2 text-sm hover:bg-accent/60 transition-colors">
                             {m.attachment_type?.startsWith("image/") ? (
                               <img src={m.attachment_url} alt="attachment" className="max-h-48 rounded object-contain" />
+                            ) : m.attachment_type?.startsWith("video/") ? (
+                              <video src={m.attachment_url} controls className="max-h-48 rounded" />
+                            ) : m.attachment_type?.startsWith("audio/") ? (
+                              <audio src={m.attachment_url} controls className="max-w-full" />
                             ) : (
                               <><Paperclip className="h-4 w-4 text-muted-foreground" /><span className="truncate text-muted-foreground">{m.attachment_url.split("/").pop()}</span></>
                             )}
@@ -337,12 +401,16 @@ function ChannelView() {
                       </PopoverContent>
                     </Popover>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setReplyTo(m)}><CornerUpLeft className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
+                      navigate({ to: "/app/servers/$serverId/threads/$messageId", params: { serverId, messageId: m.id } });
+                    }}><MessageSquare className="h-4 w-4" /></Button>
                     {m.author_id === user?.id && (
                       <>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(m); setEditText(m.content ?? ""); }}><Pencil className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeMsg(m)}><Trash2 className="h-4 w-4" /></Button>
                       </>
                     )}
+                    <ReportDialog messageId={m.id} channelId={channelId} />
                   </div>
                 </div>
               );
@@ -354,7 +422,7 @@ function ChannelView() {
             )}
           </div>
 
-          <form onSubmit={send} className="p-2 sm:p-3 border-t border-border bg-card/40 pb-safe">
+          <form onSubmit={send} className="p-2 sm:p-3 border-t border-border bg-card/40 pb-safe shrink-0">
             {replyTo && (
               <div className="mb-1.5 text-xs flex items-center justify-between px-2 py-1 rounded bg-accent/50 border border-border">
                 <span className="truncate"><CornerUpLeft className="inline h-3 w-3 mr-1" />respondendo @{replyTo.author?.username ?? "alguém"}: <span className="opacity-70">{replyTo.content}</span></span>
@@ -366,6 +434,26 @@ function ChannelView() {
               <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()} className="text-muted-foreground hover:text-primary disabled:opacity-40 p-1 shrink-0">
                 <Paperclip className="h-5 w-5" />
               </button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" className="text-muted-foreground hover:text-primary p-1 shrink-0 text-sm font-bold">
+                    GIF
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="top" className="w-auto p-2">
+                  <GifPicker onSelect={insertGif} />
+                </PopoverContent>
+              </Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" className="text-muted-foreground hover:text-primary p-1 shrink-0">
+                    <Smile className="h-5 w-5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="top" className="w-auto p-2">
+                  <StickerPicker onSelect={insertSticker} serverId={serverId} />
+                </PopoverContent>
+              </Popover>
               <Input
                 value={text}
                 onChange={(e) => { setText(e.target.value); emitTyping(); }}

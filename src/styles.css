@@ -1,6 +1,7 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -180,3 +181,19 @@
   .voice-controls .lk-button span { display: none; }
   .voice-controls .lk-button { padding: 0 !important; width: 2.5rem !important; }
 }
+
+/* Markdown prose overrides for dark theme */
+.prose :where(code):not(:where([class~="not-prose"] *)) {
+  background: var(--color-muted);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.8em;
+}
+
+/* Retro / Comic Sans font option */
+.font-retro-body { font-family: var(--font-retro); }
+.font-retro-body .prose { font-family: var(--font-retro); }
+
+/* Server theme variables (set via JS on .server-theme) */
+.server-theme { --primary: var(--server-accent); --background: var(--server-bg); }
+.server-theme.light { --background: oklch(0.95 0.01 80); --foreground: oklch(0.15 0.02 80); }

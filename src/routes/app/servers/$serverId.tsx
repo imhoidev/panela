@@ -8,7 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Hash, Plus, Settings, LogOut, Volume2, Menu, Users, Copy, AtSign, Check } from "lucide-react";
+import { MemberList } from "@/components/MemberList";
+import { ServerRolesDialog } from "@/components/ServerRoles";
+import { ServerEventsDialog } from "@/components/ServerEvents";
+import { InvitesDialog } from "@/components/Invites";
+import { ThemeDialog } from "@/components/ThemeConfig";
+import { BanDialog } from "@/components/ModPanel";
+import { getSocket } from "@/lib/socket";
+import { Hash, Plus, Settings, LogOut, Volume2, Menu, Users, Copy, AtSign, Check, Shield, CalendarDays, Link2, Palette, Gavel } from "lucide-react";
 import { toast } from "sonner";
 import { slugify, isValidSlug } from "@/lib/slug";
 
@@ -28,6 +35,17 @@ function ServerLayout() {
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<"text" | "voice" | "announcement">("text");
   const [mobileChannelsOpen, setMobileChannelsOpen] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
+  // Socket.io presence
+  useEffect(() => {
+    if (!user) return;
+    const s = getSocket(user.id);
+    const onUsers = (users: { userId: string; name: string }[]) => setOnlineUsers(new Set(users.map((u) => u.userId)));
+    s.on("presence:users", onUsers);
+    s.on("connect", () => s.emit("presence:join", { userId: user.id, serverId }));
+    return () => { s.off("presence:users"); s.off("connect"); s.disconnect(); };
+  }, [user?.id, serverId]);
 
   async function load() {
     if (!user) return;
@@ -98,7 +116,6 @@ function ServerLayout() {
       <aside className="hidden md:flex w-60 flex-col border-r border-border bg-sidebar">{channelsList}</aside>
 
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-        {/* Sub-header mobile do servidor (acima do header do canal) */}
         <div className="md:hidden flex items-center gap-2 px-2 h-10 border-b border-border bg-sidebar/80">
           <Sheet open={mobileChannelsOpen} onOpenChange={setMobileChannelsOpen}>
             <SheetTrigger asChild>
@@ -113,8 +130,16 @@ function ServerLayout() {
             </SheetContent>
           </Sheet>
           <div className="text-xs text-muted-foreground flex items-center gap-1"><Users className="h-3 w-3" />{server.member_count}</div>
+          <div className="ml-auto flex gap-0.5">
+            <InvitesDialog serverId={serverId} canManage={canManage} />
+          </div>
         </div>
-        <Outlet />
+        <div className="flex flex-1 min-h-0">
+          <Outlet />
+          {memberLevel > 0 && (
+            <MemberList serverId={serverId} onlineUsers={onlineUsers} />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -169,9 +194,13 @@ function ChannelsBlock({
           );
         })}
       </div>
-      <div className="p-2 border-t border-sidebar-border flex gap-1">
-        {canManage && <Button variant="ghost" size="sm" className="flex-1 justify-start" disabled><Settings className="h-4 w-4 mr-1.5" />Config</Button>}
-        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={leave}><LogOut className="h-4 w-4" /></Button>
+      <div className="p-2 border-t border-sidebar-border flex flex-wrap gap-1">
+        <ServerRolesDialog serverId={serverId} canManage={canManage} />
+        <ServerEventsDialog serverId={serverId} canManage={canManage} />
+        <InvitesDialog serverId={serverId} canManage={canManage} />
+        <ThemeDialog serverId={serverId} server={server} canManage={canManage} />
+        <BanDialog serverId={serverId} canManage={canManage} />
+        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive ml-auto" onClick={leave}><LogOut className="h-4 w-4" /></Button>
       </div>
     </>
   );
