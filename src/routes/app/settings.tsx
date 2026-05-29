@@ -94,12 +94,13 @@ function PushNotificationsCard() {
   async function toggle() {
     if (!user) return;
     const apiUrl = import.meta.env.VITE_API_URL || "";
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
     if (subscribed) {
       const sub = await navigator.serviceWorker.ready.then((reg) => reg.pushManager.getSubscription());
       if (sub) {
         await sub.unsubscribe();
         await fetch(`${apiUrl}/api/push/unsubscribe`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ endpoint: sub.endpoint }),
         });
       }
@@ -109,10 +110,10 @@ function PushNotificationsCard() {
       const sub = await subscribePush();
       if (!sub) { toast.error("Push não suportado"); return; }
       const res = await fetch(`${apiUrl}/api/push/subscribe`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ subscription: sub.toJSON(), user_id: user.id }),
       });
-      if (!res.ok) { toast.error("Erro ao ativar notificações"); return; }
+      if (!res.ok) { const e = await res.json(); toast.error(e.error || "Erro ao ativar notificações"); return; }
       setSubscribed(true);
       toast.success("Notificações ativadas!");
     }

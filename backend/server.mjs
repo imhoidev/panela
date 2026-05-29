@@ -94,27 +94,25 @@ async function handleRequest(req, res) {
 
     if (req.method === "POST" && url.pathname === "/api/push/subscribe") {
       const body = JSON.parse(await getBody(req));
-      const auth = req.headers["authorization"] || "";
-      const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-      if (!token) { send(res, json({ error: "Unauthorized" }, 401)); return; }
-      const { data: { user: u }, error: ue } = await sb.auth.getUser(token);
-      if (ue || !u) { send(res, json({ error: "Invalid token" }, 401)); return; }
+      const sub = body.subscription || body;
+      const endpoint = sub.endpoint;
+      const p256dh = sub.keys?.p256dh || "";
+      const authKey = sub.keys?.auth || "";
+      if (!endpoint) { send(res, json({ error: "endpoint required" }, 400)); return; }
+      const userId = body.user_id || body.userId;
+      if (!userId) { send(res, json({ error: "user_id required" }, 400)); return; }
       const { error } = await sb.from("push_subscriptions").upsert({
-        user_id: u.id, endpoint: body.endpoint, p256dh: body.keys?.p256dh, auth: body.keys?.auth, user_agent: req.headers["user-agent"] || null,
+        user_id: userId, endpoint, p256dh: p256dh, auth: authKey, user_agent: req.headers["user-agent"] || null,
       }, { onConflict: "user_id,endpoint" });
       if (error) { send(res, json({ error: error.message }, 500)); return; }
       send(res, json({ ok: true }));
       return;
     }
 
-    if (req.method === "DELETE" && url.pathname === "/api/push/subscribe") {
+    if (req.method === "POST" && url.pathname === "/api/push/unsubscribe") {
       const body = JSON.parse(await getBody(req));
-      const auth = req.headers["authorization"] || "";
-      const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-      if (!token) { send(res, json({ error: "Unauthorized" }, 401)); return; }
-      const { data: { user: u }, error: ue } = await sb.auth.getUser(token);
-      if (ue || !u) { send(res, json({ error: "Invalid token" }, 401)); return; }
-      const { error } = await sb.from("push_subscriptions").delete().eq("endpoint", body.endpoint).eq("user_id", u.id);
+      if (!body.endpoint) { send(res, json({ error: "endpoint required" }, 400)); return; }
+      const { error } = await sb.from("push_subscriptions").delete().eq("endpoint", body.endpoint);
       if (error) { send(res, json({ error: error.message }, 500)); return; }
       send(res, json({ ok: true }));
       return;
