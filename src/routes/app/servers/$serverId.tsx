@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -224,24 +225,24 @@ function ServerLayout() {
       </div>
 
       {/* Server Settings Dialog */}
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-w-2xl h-[80vh] p-0">
-          <DialogHeader className="sr-only"><DialogTitle>Configurações do servidor</DialogTitle></DialogHeader>
-          <ServerSettingsPanel
-            server={server}
-            serverId={serverId}
-            isOwner={isOwner}
-            canManage={canManage}
-            canKick={canKick}
-            members={members}
-            memberSearch={memberSearch}
-            setMemberSearch={setMemberSearch}
-            kickMember={kickMember}
-            presence={presence}
-            onServerUpdate={(s: any) => setServer(s)}
-          />
-        </DialogContent>
-      </Dialog>
+      <ResponsiveDialog open={settingsOpen} onOpenChange={setSettingsOpen}
+        title="Configurações do servidor"
+        className="max-h-[90dvh] overflow-hidden"
+        contentClassName="h-full overflow-hidden p-0">
+        <ServerSettingsPanel
+          server={server}
+          serverId={serverId}
+          isOwner={isOwner}
+          canManage={canManage}
+          canKick={canKick}
+          members={members}
+          memberSearch={memberSearch}
+          setMemberSearch={setMemberSearch}
+          kickMember={kickMember}
+          presence={presence}
+          onServerUpdate={(s: any) => setServer(s)}
+        />
+      </ResponsiveDialog>
     </div>
   );
 }
@@ -316,13 +317,15 @@ function ChannelsBlock({
           <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} />
         ))}
       </ScrollArea>
-      <div className="p-2 border-t border-sidebar-border flex flex-wrap gap-1">
+      <div className="p-2 border-t border-sidebar-border flex flex-wrap gap-1.5">
         <ServerRolesDialog serverId={serverId} canManage={canManage} />
         <ServerEventsDialog serverId={serverId} canManage={canManage} />
         <InvitesDialog serverId={serverId} canManage={canManage} />
         <ThemeDialog serverId={serverId} server={server} canManage={canManage} />
         <BanDialog serverId={serverId} canManage={canManage} />
-        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive ml-auto" onClick={leave}><LogOut className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive ml-auto h-9 min-w-[2.25rem]" onClick={leave} title="Sair do servidor">
+          <LogOut className="h-4 w-4" />
+        </Button>
       </div>
     </>
   );
@@ -388,14 +391,7 @@ function ServerSettingsPanel({
 
   return (
     <Tabs value={tab} onValueChange={setTab} className="flex flex-col h-full">
-      <div className="p-5 pb-0">
-        <DialogHeader className="mb-4">
-          <DialogTitle className="flex items-center gap-2">
-            {server.icon_url ? <img src={server.icon_url} className="h-6 w-6 rounded" /> : null}
-            {server.name}
-          </DialogTitle>
-          <DialogDescription>Gerencie as configurações da panela</DialogDescription>
-        </DialogHeader>
+      <div className="p-4 md:p-5 pb-0">
         <TabsList className="w-full grid grid-cols-3">
           <TabsTrigger value="overview" className="gap-1.5"><Settings className="h-4 w-4" /> Geral</TabsTrigger>
           <TabsTrigger value="members" className="gap-1.5"><Users className="h-4 w-4" /> Membros</TabsTrigger>
@@ -403,7 +399,7 @@ function ServerSettingsPanel({
         </TabsList>
       </div>
 
-      <div className="flex-1 overflow-auto p-5">
+      <div className="flex-1 overflow-auto p-4 md:p-5">
         <TabsContent value="overview" className="space-y-4 mt-0">
           {canManage && (
             <>
@@ -516,28 +512,26 @@ function SlugTag({ slug, canEdit, serverId, onSaved }: { slug: string | null; ca
         {copied ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
       </button>
       {canEdit && (
-        <Dialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (o) setVal(slug); }}>
-          <DialogTrigger asChild>
+        <ResponsiveDialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (o) setVal(slug); }}
+          title="Editar slug"
+          trigger={
             <button className="p-1 rounded hover:bg-sidebar-accent/60 text-muted-foreground hover:text-foreground" title="Editar slug">
               <Settings className="h-3 w-3" />
             </button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Editar slug</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1.5"><Label>Slug</Label>
-                <div className="relative">
-                  <AtSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-8 font-mono" value={val} onChange={(e) => setVal(slugify(e.target.value))} maxLength={32} />
-                </div>
-                <p className="text-xs text-muted-foreground">panela.app/s/{slugify(val) || "—"}</p>
+          }>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label>Slug</Label>
+              <div className="relative">
+                <AtSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input className="pl-8 font-mono h-10" value={val} onChange={(e) => setVal(slugify(e.target.value))} maxLength={32} />
               </div>
-              <Button className="w-full" onClick={save} disabled={saving || slugify(val) === slug}>
-                {saving ? "Salvando…" : "Salvar"}
-              </Button>
+              <p className="text-xs text-muted-foreground">panela.app/s/{slugify(val) || "—"}</p>
             </div>
-          </DialogContent>
-        </Dialog>
+            <Button className="w-full h-10" onClick={save} disabled={saving || slugify(val) === slug}>
+              {saving ? "Salvando…" : "Salvar"}
+            </Button>
+          </div>
+        </ResponsiveDialog>
       )}
     </div>
   );

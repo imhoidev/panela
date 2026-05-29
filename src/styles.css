@@ -199,20 +199,51 @@
 .server-theme.light { --background: oklch(0.95 0.01 80); --foreground: oklch(0.15 0.02 80); }
 
 /* ============ Responsive utilities ============ */
+.hide-on-desktop { display: none !important; }
 @media (max-width: 640px) {
   .hide-on-mobile { display: none !important; }
-  .message-toolbar { right: 0.25rem !important; top: -2rem !important; }
-  .message-toolbar button { width: 1.75rem !important; height: 1.75rem !important; }
+  .show-on-mobile-only { display: flex !important; }
+  /* Touch-friendly minimums */
+  .touch-grow { min-height: 44px; min-width: 44px; }
+  .touch-grow-sm { min-height: 36px; min-width: 36px; }
 }
 @media (min-width: 641px) {
+  .hide-on-desktop { display: flex !important; }
   .show-on-mobile-only { display: none !important; }
+}
+
+/* Message toolbar — responsivo */
+.message-toolbar {
+  position: absolute; top: -2.5rem; right: 0.5rem;
+  display: flex; gap: 1px;
+  background: var(--color-card); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  padding: 2px; z-index: 20;
+}
+.message-toolbar button {
+  width: 2rem; height: 2rem; display: grid; place-items: center;
+  border-radius: var(--radius-sm); color: var(--color-muted-foreground);
+  transition: background 100ms, color 100ms;
+}
+.message-toolbar button:hover { background: var(--color-accent); color: var(--color-accent-foreground); }
+@media (max-width: 640px) {
+  .message-toolbar { right: 0.25rem; top: -2rem; gap: 0; }
+  .message-toolbar button { width: 2.25rem; height: 2.25rem; }
 }
 
 /* Smooth touch scrolling */
 .touch-pan-y { -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
+
+/* Fix input zoom no iOS */
+@supports (-webkit-touch-callout: none) {
+  input, textarea, select { font-size: 16px !important; }
+}
 
 /* Reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   .fx-glow, .fx-rainbow, .fx-typing { animation: none !important; }
 }
+
+/* Mobile bottom sheet / drawer shadow */
+.drawer-overlay { background: rgba(0,0,0,0.6); }

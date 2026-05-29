@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,43 +44,39 @@ export function ServerEventsDialog({ serverId, canManage }: { serverId: string; 
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm"><CalendarDays className="h-4 w-4 mr-1" />Eventos</Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Eventos</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          {canManage && (
-            <div className="rounded-lg border border-border p-3 space-y-2">
-              <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Título do evento" className="h-9" />
-              <Textarea value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Descrição (opcional)" rows={2} />
-              <Label>Data</Label>
-              <Input type="datetime-local" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="h-9" />
-              <Button size="sm" onClick={create} className="w-full"><Plus className="h-4 w-4 mr-1" />Criar evento</Button>
-            </div>
-          )}
-          {events.map((ev) => (
-            <div key={ev.id} className="rounded-lg border border-border p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-medium text-sm">{ev.title}</p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                    <Calendar className="h-3 w-3" /> {new Date(ev.event_date).toLocaleString("pt-BR")}
-                  </p>
-                  {ev.description && <p className="text-xs text-muted-foreground mt-1">{ev.description}</p>}
-                </div>
-                {canManage && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => remove(ev.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
+    <ResponsiveDialog open={open} onOpenChange={setOpen}
+      title="Eventos"
+      trigger={<Button variant="ghost" size="sm"><CalendarDays className="h-4 w-4 mr-1" />Eventos</Button>}>
+      <div className="space-y-3">
+        {canManage && (
+          <div className="rounded-lg border border-border p-3 space-y-2">
+            <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Título do evento" className="h-9" />
+            <Textarea value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Descrição (opcional)" rows={2} />
+            <Label>Data</Label>
+            <Input type="datetime-local" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="h-9" />
+            <Button size="sm" onClick={create} className="w-full"><Plus className="h-4 w-4 mr-1" />Criar evento</Button>
+          </div>
+        )}
+        {events.map((ev) => (
+          <div key={ev.id} className="rounded-lg border border-border p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-medium text-sm">{ev.title}</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <Calendar className="h-3 w-3" /> {new Date(ev.event_date).toLocaleString("pt-BR")}
+                </p>
+                {ev.description && <p className="text-xs text-muted-foreground mt-1">{ev.description}</p>}
               </div>
+              {canManage && (
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => remove(ev.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
-          ))}
-          {!events.length && <p className="text-xs text-muted-foreground text-center py-4">Nenhum evento agendado</p>}
-        </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+        ))}
+        {!events.length && <p className="text-xs text-muted-foreground text-center py-4">Nenhum evento agendado</p>}
+      </div>
+    </ResponsiveDialog>
   );
 }

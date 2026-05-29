@@ -407,27 +407,33 @@ function ChannelView() {
                     )}
                   </div>
                   {/* Toolbar mensagem */}
-                  <div className="absolute -top-3 right-2 hidden group-hover:flex bg-card border border-border rounded-md shadow px-0.5">
+                  <div className="message-toolbar opacity-0 group-hover:opacity-100 transition-opacity duration-100">
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7"><Smile className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="!h-7 !w-7 sm:!h-8 sm:!w-8"><Smile className="h-4 w-4" /></Button>
                       </PopoverTrigger>
-                      <PopoverContent className="p-1 w-auto">
+                      <PopoverContent className="p-1 w-auto" side="top" align="start">
                         <div className="flex gap-0.5">
                           {EMOJIS.map((e) => (
-                            <button key={e} onClick={() => react(m, e)} className="text-lg hover:bg-accent rounded p-1">{e}</button>
+                            <button key={e} onClick={() => react(m, e)} className="text-lg hover:bg-accent rounded p-1.5 sm:p-1">{e}</button>
                           ))}
                         </div>
                       </PopoverContent>
                     </Popover>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setReplyTo(m)}><CornerUpLeft className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
-                      navigate({ to: "/app/servers/$serverId/threads/$messageId", params: { serverId, messageId: m.id } });
-                    }}><MessageSquare className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" className="!h-7 !w-7 sm:!h-8 sm:!w-8" onClick={() => setReplyTo(m)}>
+                      <CornerUpLeft className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="!h-7 !w-7 sm:!h-8 sm:!w-8" onClick={() => navigate({ to: "/app/servers/$serverId/threads/$messageId", params: { serverId, messageId: m.id } })}>
+                      <MessageSquare className="h-4 w-4" />
+                    </Button>
                     {m.author_id === user?.id && (
                       <>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(m); setEditText(m.content ?? ""); }}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeMsg(m)}><Trash2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="!h-7 !w-7 sm:!h-8 sm:!w-8" onClick={() => { setEditing(m); setEditText(m.content ?? ""); }}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="!h-7 !w-7 sm:!h-8 sm:!w-8 text-destructive" onClick={() => removeMsg(m)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </>
                     )}
                     <ReportDialog messageId={m.id} channelId={channelId} />
@@ -442,35 +448,35 @@ function ChannelView() {
             )}
           </div>
 
-          <form onSubmit={send} className="p-2 sm:p-3 border-t border-border bg-card/40 pb-safe shrink-0">
+          <form onSubmit={send} className="p-2 sm:p-3 border-t border-border bg-card/40 pb-[max(0.5rem,env(safe-area-inset-bottom))] shrink-0">
             {replyTo && (
-              <div className="mb-1.5 text-xs flex items-center justify-between px-2 py-1 rounded bg-accent/50 border border-border">
+              <div className="mb-1.5 text-xs flex items-center justify-between px-3 py-1.5 rounded-lg bg-accent/50 border border-border">
                 <span className="truncate"><CornerUpLeft className="inline h-3 w-3 mr-1" />respondendo @{replyTo.author?.username ?? "alguém"}: <span className="opacity-70">{replyTo.content}</span></span>
-                <button type="button" onClick={() => setReplyTo(null)}><X className="h-3.5 w-3.5" /></button>
+                <button type="button" onClick={() => setReplyTo(null)} className="p-1.5 touch-grow-sm"><X className="h-4 w-4" /></button>
               </div>
             )}
-            <div className="relative flex items-center gap-1">
+            <div className="flex items-center gap-1 sm:gap-1.5 bg-background rounded-xl border border-border px-1.5 sm:px-2 py-1 sm:py-1.5">
               <input type="file" ref={fileRef} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }} />
-              <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()} className="text-muted-foreground hover:text-primary disabled:opacity-40 p-1 shrink-0">
+              <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()} className="text-muted-foreground hover:text-primary disabled:opacity-40 p-1.5 sm:p-1 shrink-0 touch-grow-sm">
                 <Paperclip className="h-5 w-5" />
               </button>
               <Popover>
                 <PopoverTrigger asChild>
-                  <button type="button" className="text-muted-foreground hover:text-primary p-1 shrink-0 text-sm font-bold">
+                  <button type="button" className="text-muted-foreground hover:text-primary px-1.5 sm:px-1 shrink-0 text-sm font-bold h-9 min-w-[2.5rem]">
                     GIF
                   </button>
                 </PopoverTrigger>
-                <PopoverContent side="top" className="w-auto p-2">
+                <PopoverContent side="top" className="w-auto p-2" align="start">
                   <GifPicker onSelect={insertGif} />
                 </PopoverContent>
               </Popover>
               <Popover>
                 <PopoverTrigger asChild>
-                  <button type="button" className="text-muted-foreground hover:text-primary p-1 shrink-0">
+                  <button type="button" className="text-muted-foreground hover:text-primary p-1.5 sm:p-1 shrink-0 h-9 min-w-[2.5rem] grid place-items-center">
                     <Smile className="h-5 w-5" />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent side="top" className="w-auto p-2">
+                <PopoverContent side="top" className="w-auto p-2" align="start">
                   <StickerPicker onSelect={insertSticker} serverId={serverId} />
                 </PopoverContent>
               </Popover>
@@ -478,10 +484,11 @@ function ChannelView() {
                 value={text}
                 onChange={(e) => { setText(e.target.value); emitTyping(); }}
                 placeholder={`Mensagem em #${channel.name}`}
-                className="bg-input border-border h-11"
+                className="bg-transparent border-0 h-10 sm:h-11 flex-1 min-w-0 px-1.5 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm sm:text-base"
                 maxLength={2000}
               />
-              <button type="submit" disabled={!text.trim() || sending} className="text-muted-foreground hover:text-primary disabled:opacity-40 p-1 shrink-0">
+              <button type="submit" disabled={!text.trim() || sending}
+                className="text-muted-foreground hover:text-primary disabled:opacity-30 p-1.5 sm:p-1 shrink-0 touch-grow-sm transition-colors">
                 <SendHorizontal className="h-5 w-5" />
               </button>
             </div>

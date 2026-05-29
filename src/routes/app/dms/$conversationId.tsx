@@ -156,26 +156,27 @@ function DMChat() {
         })}
       </div>
 
-      <form onSubmit={send} className="p-2 sm:p-3 border-t border-border bg-card/40 pb-safe shrink-0">
+      <form onSubmit={send} className="p-2 sm:p-3 border-t border-border bg-card/40 pb-[max(0.5rem,env(safe-area-inset-bottom))] shrink-0">
         {replyTo && (
-          <div className="mb-1.5 flex items-center justify-between px-2 py-1 rounded bg-accent/50 border border-border text-xs">
+          <div className="mb-1.5 flex items-center justify-between px-3 py-1.5 rounded-lg bg-accent/50 border border-border text-xs">
             <span className="truncate"><CornerUpLeft className="inline h-3 w-3 mr-1" />respondendo</span>
-            <button type="button" onClick={() => setReplyTo(null)}><X className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => setReplyTo(null)} className="p-1.5 touch-grow-sm"><X className="h-4 w-4" /></button>
           </div>
         )}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 bg-background rounded-xl border border-border px-1.5 sm:px-2 py-1 sm:py-1.5">
           <input type="file" ref={fileRef} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f, conversationId, user?.id); e.target.value = ""; }} />
-          <button type="button" onClick={() => fileRef.current?.click()} className="text-muted-foreground hover:text-primary p-1 shrink-0">
+          <button type="button" onClick={() => fileRef.current?.click()} className="text-muted-foreground hover:text-primary p-1.5 sm:p-1 shrink-0 touch-grow-sm">
             <Paperclip className="h-5 w-5" />
           </button>
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Mensagem..."
-            className="bg-input border-border h-11"
+            className="bg-transparent border-0 h-10 sm:h-11 flex-1 min-w-0 px-1.5 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm sm:text-base"
             maxLength={2000}
           />
-          <button type="submit" disabled={!text.trim() || sending} className="text-muted-foreground hover:text-primary disabled:opacity-40 p-1 shrink-0">
+          <button type="submit" disabled={!text.trim() || sending}
+            className="text-muted-foreground hover:text-primary disabled:opacity-30 p-1.5 sm:p-1 shrink-0 touch-grow-sm transition-colors">
             <SendHorizontal className="h-5 w-5" />
           </button>
         </div>

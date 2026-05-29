@@ -48,20 +48,20 @@ function Discover() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-6 md:p-10 space-y-6">
+    <div className="max-w-5xl mx-auto p-4 md:p-10 space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Descobrir panelas</h1>
-        <p className="text-sm text-muted-foreground">Comunidades públicas pra conhecer gente nova.</p>
+        <h1 className="text-xl md:text-2xl font-bold">Descobrir panelas</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Comunidades públicas pra conhecer gente nova.</p>
       </div>
       <form onSubmit={(e) => { e.preventDefault(); load(); }} className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome…" className="pl-9" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome…" className="pl-9 h-10" />
       </form>
 
       {loading ? <p className="text-muted-foreground">Carregando…</p> : servers.length === 0 ? (
         <Card className="p-8 text-center text-muted-foreground">Nenhuma panela pública encontrada.</Card>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {servers.map((s) => {
             const joined = myIds.has(s.id);
             return (
