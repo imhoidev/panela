@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { pushSupported, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
+import { useEffect, useState } from "react";
+import { Bell, BellOff } from "lucide-react";
 
 export const Route = createFileRoute("/app/settings")({
   head: () => ({ meta: [{ title: "Configurações — PANELA" }] }),
