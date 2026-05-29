@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { SignJWT } from "jose";
 import { createClient } from "@supabase/supabase-js";
 import { Server as IOServer } from "socket.io";
+import webpush from "web-push";
 
 const PORT = Number(process.env.PORT) || 3001;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
@@ -11,76 +12,238 @@ const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
 const LIVEKIT_URL = process.env.LIVEKIT_URL;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "content-type": "application/json" },
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails("mailto:panela@panela.app", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+
+const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+const rateLimitMap = new Map();
+const RATE_WINDOW = 60_000;
+
+function rateLimit(key, maxReqs) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key) ?? { count: 0, resetAt: now + RATE_WINDOW };
+  if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + RATE_WINDOW; }
+  entry.count++;
+  rateLimitMap.set(key, entry);
+  return entry.count <= maxReqs;
+}
+
+function getBody(req) {
+  return new Promise((resolve) => {
+    let data = "";
+    req.on("data", (chunk) => data += chunk);
+    req.on("end", () => resolve(data));
   });
 }
+
+function json(data, status = 200, headers = {}) {
+  return { status, headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(data) };
+}
+
+function send(res, response) {
+  const origin = res.req?.headers?.origin || "*";
+  const cors = {
+    "access-control-allow-origin": FRONTEND_ORIGIN === "*" ? origin : FRONTEND_ORIGIN,
+    "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+    "access-control-allow-headers": "content-type, authorization",
+    "access-control-allow-credentials": "true",
+  };
+  res.writeHead(response.status, { ...cors, ...response.headers });
+  res.end(response.body);
+}
+
+async function handleRequest(req, res) {
+  res.req = req;
+
+  if (req.method === "OPTIONS") {
+    send(res, json(null, 204));
+    return;
+  }
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+  const rlKey = `${ip}:${url.pathname}`;
+
+  if (url.pathname !== "/health" && !rateLimit(rlKey, 60)) {
+    send(res, json({ error: "Muitas requisições. Tente de novo em instantes." }, 429));
+    return;
+  }
+
+  try {
+    if (req.method === "GET" && url.pathname === "/health") {
+      send(res, json({ ok: true, ts: Date.now(), uptime: process.uptime() }));
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/livekit/token") {
+      const body = await getBody(req);
+      const request = new Request(`http://localhost${url.pathname}`, {
+        method: "POST",
+        headers: { "content-type": req.headers["content-type"] || "", authorization: req.headers["authorization"] || "" },
+        body,
+      });
+      const result = await handleLiveKitToken(request);
+      send(res, result);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/push/subscribe") {
+      const body = JSON.parse(await getBody(req));
+      const auth = req.headers["authorization"] || "";
+      const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+      if (!token) { send(res, json({ error: "Unauthorized" }, 401)); return; }
+      const { data: { user: u }, error: ue } = await sb.auth.getUser(token);
+      if (ue || !u) { send(res, json({ error: "Invalid token" }, 401)); return; }
+      const { error } = await sb.from("push_subscriptions").upsert({
+        user_id: u.id, endpoint: body.endpoint, p256dh: body.keys?.p256dh, auth: body.keys?.auth, user_agent: req.headers["user-agent"] || null,
+      }, { onConflict: "user_id,endpoint" });
+      if (error) { send(res, json({ error: error.message }, 500)); return; }
+      send(res, json({ ok: true }));
+      return;
+    }
+
+    if (req.method === "DELETE" && url.pathname === "/api/push/subscribe") {
+      const body = JSON.parse(await getBody(req));
+      const auth = req.headers["authorization"] || "";
+      const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+      if (!token) { send(res, json({ error: "Unauthorized" }, 401)); return; }
+      const { data: { user: u }, error: ue } = await sb.auth.getUser(token);
+      if (ue || !u) { send(res, json({ error: "Invalid token" }, 401)); return; }
+      const { error } = await sb.from("push_subscriptions").delete().eq("endpoint", body.endpoint).eq("user_id", u.id);
+      if (error) { send(res, json({ error: error.message }, 500)); return; }
+      send(res, json({ ok: true }));
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/push/test") {
+      const auth = req.headers["authorization"] || "";
+      const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+      if (!token) { send(res, json({ error: "Unauthorized" }, 401)); return; }
+      const { data: { user: u } } = await sb.auth.getUser(token);
+      if (!u) { send(res, json({ error: "Invalid token" }, 401)); return; }
+      const { data: subs } = await sb.from("push_subscriptions").select("*").eq("user_id", u.id);
+      if (!subs?.length) { send(res, json({ error: "Nenhuma inscrição encontrada" }, 404)); return; }
+      const results = [];
+      for (const sub of subs) {
+        try {
+          await webpush.sendNotification({
+            endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth },
+          }, JSON.stringify({ title: "🔔 PANELA", body: "Notificação de teste! Funciona 🎉", icon: "/icon.png", data: { url: "/app" } }));
+          results.push({ endpoint: sub.endpoint, ok: true });
+        } catch (e) {
+          if (e.statusCode === 410) await sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+          results.push({ endpoint: sub.endpoint, ok: false, error: e.message });
+        }
+      }
+      send(res, json({ results }));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/search/messages") {
+      const q = url.searchParams.get("q");
+      const serverId = url.searchParams.get("server_id");
+      const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 100);
+      const before = url.searchParams.get("before");
+      if (!q || !serverId) { send(res, json({ error: "q and server_id required" }, 400)); return; }
+      const { data: channels } = await sb.from("channels").select("id").eq("server_id", serverId);
+      if (!channels?.length) { send(res, json([])); return; }
+      const channelIds = channels.map((c) => c.id);
+      let query = sb.from("messages").select("id,content,created_at,author_id,channel_id").in("channel_id", channelIds).ilike("content", `%${q}%`).order("created_at", { ascending: false }).limit(limit);
+      if (before) query = query.lt("created_at", before);
+      const { data } = await query;
+      const userIds = [...new Set((data ?? []).map((m) => m.author_id))];
+      if (userIds.length) {
+        const { data: profs } = await sb.from("profiles").select("id,username,display_name,avatar_url").in("id", userIds);
+        const profMap = Object.fromEntries((profs ?? []).map((p) => [p.id, p]));
+        for (const m of data ?? []) m.author = profMap[m.author_id] || null;
+      }
+      send(res, json(data ?? []));
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/upload") {
+      const auth = req.headers["authorization"] || "";
+      const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+      if (!token) { send(res, json({ error: "Unauthorized" }, 401)); return; }
+      const { data: { user: u }, error: ue } = await sb.auth.getUser(token);
+      if (ue || !u) { send(res, json({ error: "Invalid token" }, 401)); return; }
+      const body = await getBody(req);
+      const ct = req.headers["content-type"] || "";
+      if (!ct.includes("multipart/form-data")) { send(res, json({ error: "Expected multipart/form-data" }, 400)); return; }
+
+      const boundary = ct.split("boundary=")[1];
+      const parts = parseMultipart(body, boundary);
+      const filePart = parts.find((p) => p.name === "file");
+      const channelId = parts.find((p) => p.name === "channel_id")?.value;
+      if (!filePart || !channelId) { send(res, json({ error: "file and channel_id required" }, 400)); return; }
+
+      const bucket = "attachments";
+      const path = `${u.id}/${Date.now()}-${filePart.filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const { error: upErr } = await sb.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: false });
+      if (upErr) { send(res, json({ error: upErr.message }, 500)); return; }
+      const { data: pub } = sb.storage.from(bucket).getPublicUrl(path);
+      const { data: msg, error: msgErr } = await sb.from("messages").insert({ channel_id: channelId, author_id: u.id, content: null, attachment_url: pub.publicUrl, attachment_type: filePart.contentType }).select("id").single();
+      if (msgErr) { send(res, json({ error: msgErr.message }, 500)); return; }
+
+      send(res, json({ id: msg.id, url: pub.publicUrl }));
+      return;
+    }
+
+    send(res, json({ error: "not found" }, 404));
+  } catch (e) {
+    console.error("request error", url.pathname, e);
+    send(res, json({ error: "Erro interno" }, 500));
+  }
+}
+
+function parseMultipart(body, boundary) {
+  const parts = [];
+  const lines = body.split(`--${boundary}`);
+  for (const block of lines) {
+    if (block.includes("filename=")) {
+      const headerMatch = block.match(/name="([^"]+)"\s*;\s*filename="([^"]+)"/);
+      const contentTypeMatch = block.match(/Content-Type:\s*(\S+)/);
+      const dataStart = block.indexOf("\r\n\r\n") + 4;
+      const dataEnd = block.lastIndexOf("\r\n--");
+      const data = block.slice(dataStart, dataEnd > dataStart ? dataEnd : undefined);
+      if (headerMatch) parts.push({ name: headerMatch[1], filename: headerMatch[2], contentType: contentTypeMatch?.[1] || "application/octet-stream", data });
+    } else {
+      const match = block.match(/name="([^"]+)"\r\n\r\n(.+?)\r\n/);
+      if (match) parts.push({ name: match[1], value: match[2].trim() });
+    }
+  }
+  return parts;
+}
+
+const server = http.createServer(handleRequest);
 
 async function handleLiveKitToken(request) {
   try {
     const auth = request.headers.get("authorization") ?? "";
     const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7) : null;
     if (!token) return json({ error: "Missing bearer token" }, 401);
-
-    if (!LIVEKIT_URL || !LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
-      return json({ error: "LiveKit não está configurado" }, 500);
-    }
-
-    const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: userData, error: userErr } = await sb.auth.getUser();
+    if (!LIVEKIT_URL || !LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) return json({ error: "LiveKit não está configurado" }, 500);
+    const lkSb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, { global: { headers: { Authorization: `Bearer ${token}` } } });
+    const { data: userData, error: userErr } = await lkSb.auth.getUser();
     if (userErr || !userData.user) return json({ error: "Sessão inválida" }, 401);
-
     const body = (await request.json().catch(() => ({})));
-    if (!body.room || !/^[a-zA-Z0-9_:-]{1,128}$/.test(body.room)) {
-      return json({ error: "room inválido" }, 400);
-    }
-
+    if (!body.room || !/^[a-zA-Z0-9_:-]{1,128}$/.test(body.room)) return json({ error: "room inválido" }, 400);
     if (body.channelId) {
-      const { data: ch } = await sb
-        .from("channels")
-        .select("id, type")
-        .eq("id", body.channelId)
-        .maybeSingle();
+      const { data: ch } = await lkSb.from("channels").select("id, type").eq("id", body.channelId).maybeSingle();
       if (!ch || ch.type !== "voice") return json({ error: "Canal de voz não encontrado" }, 403);
     }
-
-    const { data: profile } = await sb
-      .from("profiles")
-      .select("username,display_name,avatar_url")
-      .eq("id", userData.user.id)
-      .maybeSingle();
+    const { data: profile } = await lkSb.from("profiles").select("username,display_name,avatar_url").eq("id", userData.user.id).maybeSingle();
     const identity = userData.user.id;
     const display = body.name || profile?.display_name || profile?.username || "panela";
-
     const now = Math.floor(Date.now() / 1000);
-    const grants = {
-      video: {
-        room: body.room,
-        roomJoin: true,
-        canPublish: true,
-        canSubscribe: true,
-        canPublishData: true,
-      },
-      name: display,
-      metadata: JSON.stringify({ avatar_url: profile?.avatar_url ?? null }),
-    };
-
+    const grants = { video: { room: body.room, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true }, name: display, metadata: JSON.stringify({ avatar_url: profile?.avatar_url ?? null }) };
     const secret = new TextEncoder().encode(LIVEKIT_API_SECRET);
-    const jwt = await new SignJWT(grants)
-      .setProtectedHeader({ alg: "HS256" })
-      .setIssuer(LIVEKIT_API_KEY)
-      .setSubject(identity)
-      .setJti(crypto.randomUUID())
-      .setIssuedAt(now)
-      .setExpirationTime(now + 60 * 60 * 6)
-      .setNotBefore(now - 5)
-      .sign(secret);
-
+    const jwt = await new SignJWT(grants).setProtectedHeader({ alg: "HS256" }).setIssuer(LIVEKIT_API_KEY).setSubject(identity).setJti(crypto.randomUUID()).setIssuedAt(now).setExpirationTime(now + 60 * 60 * 6).setNotBefore(now - 5).sign(secret);
     return json({ token: jwt, url: LIVEKIT_URL, identity, name: display });
   } catch (e) {
     console.error("livekit-token error", e);
@@ -88,100 +251,48 @@ async function handleLiveKitToken(request) {
   }
 }
 
-async function handleRequest(req, res) {
-  const origin = req.headers["origin"] || "*";
-  const headers = {
-    "access-control-allow-origin": FRONTEND_ORIGIN === "*" ? origin : FRONTEND_ORIGIN,
-    "access-control-allow-methods": "GET, POST, OPTIONS",
-    "access-control-allow-headers": "content-type, authorization",
-    "access-control-allow-credentials": "true",
-  };
-
-  if (req.method === "OPTIONS") {
-    res.writeHead(204, headers);
-    res.end();
-    return;
-  }
-
-  const url = new URL(req.url, `http://${req.headers.host}`);
-
-  if (req.method === "GET" && url.pathname === "/health") {
-    res.writeHead(200, { ...headers, "content-type": "application/json" });
-    res.end(JSON.stringify({ ok: true, ts: Date.now() }));
-    return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/livekit/token") {
-    const body = await new Promise((resolve) => {
-      let data = "";
-      req.on("data", (chunk) => data += chunk);
-      req.on("end", () => resolve(data));
-    });
-    const request = new Request(`http://localhost${url.pathname}`, {
-      method: "POST",
-      headers: { "content-type": req.headers["content-type"] || "", authorization: req.headers["authorization"] || "" },
-      body,
-    });
-    const response = await handleLiveKitToken(request);
-    res.writeHead(response.status, { ...headers, ...Object.fromEntries(response.headers) });
-    res.end(await response.text());
-    return;
-  }
-
-  res.writeHead(404, { ...headers, "content-type": "application/json" });
-  res.end(JSON.stringify({ error: "not found" }));
-}
-
-const server = http.createServer(handleRequest);
-
 const io = new IOServer(server, {
   path: "/realtime",
-  cors: {
-    origin: FRONTEND_ORIGIN === "*" ? true : FRONTEND_ORIGIN.split(","),
-    credentials: true,
-  },
+  cors: { origin: FRONTEND_ORIGIN === "*" ? true : FRONTEND_ORIGIN.split(","), credentials: true },
 });
 
 const presence = new Map();
+const userStatus = new Map();
 
 io.on("connection", (socket) => {
   const { userId } = socket.handshake.auth ?? {};
-  if (!userId) {
-    socket.disconnect(true);
-    return;
-  }
+  if (!userId) { socket.disconnect(true); return; }
 
   if (!presence.has(userId)) presence.set(userId, { sockets: new Set(), status: "online" });
   const entry = presence.get(userId);
   entry.sockets.add(socket.id);
+  userStatus.set(userId, "online");
   io.emit("presence:update", { userId, status: entry.status });
 
-  socket.on("channel:join", (channelId) => {
-    if (typeof channelId === "string") socket.join(`ch:${channelId}`);
-  });
-  socket.on("channel:leave", (channelId) => {
-    if (typeof channelId === "string") socket.leave(`ch:${channelId}`);
-  });
-
-  socket.on("typing:start", ({ channelId, username }) => {
-    if (!channelId) return;
-    socket.to(`ch:${channelId}`).emit("typing:start", { userId, username });
-  });
-  socket.on("typing:stop", ({ channelId }) => {
-    if (!channelId) return;
-    socket.to(`ch:${channelId}`).emit("typing:stop", { userId });
-  });
+  socket.on("channel:join", (channelId) => { if (typeof channelId === "string") socket.join(`ch:${channelId}`); });
+  socket.on("channel:leave", (channelId) => { if (typeof channelId === "string") socket.leave(`ch:${channelId}`); });
+  socket.on("typing:start", ({ channelId, username }) => { if (!channelId) return; socket.to(`ch:${channelId}`).emit("typing:start", { userId, username }); });
+  socket.on("typing:stop", ({ channelId }) => { if (!channelId) return; socket.to(`ch:${channelId}`).emit("typing:stop", { userId }); });
 
   socket.on("presence:set", (status) => {
     if (!["online", "idle", "dnd", "invisible"].includes(status)) return;
     entry.status = status;
+    userStatus.set(userId, status);
     io.emit("presence:update", { userId, status });
+  });
+
+  socket.on("presence:subscribe", (userIds) => {
+    if (!Array.isArray(userIds)) return;
+    const statuses = {};
+    for (const uid of userIds) statuses[uid] = userStatus.get(uid) || "offline";
+    socket.emit("presence:bulk", statuses);
   });
 
   socket.on("disconnect", () => {
     entry.sockets.delete(socket.id);
     if (entry.sockets.size === 0) {
       presence.delete(userId);
+      userStatus.delete(userId);
       io.emit("presence:update", { userId, status: "offline" });
     }
   });
@@ -189,5 +300,4 @@ io.on("connection", (socket) => {
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`[panela-backend] API + Socket.io listening on :${PORT}`);
-  console.log(`[panela-backend] FRONTEND_ORIGIN=${FRONTEND_ORIGIN}`);
 });

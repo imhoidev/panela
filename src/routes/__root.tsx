@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet, Link, createRootRouteWithContext, useRouter,
@@ -6,6 +7,7 @@ import {
 import appCss from "../styles.css?url";
 import { AuthProvider } from "@/hooks/use-auth";
 import { Toaster } from "@/components/ui/sonner";
+import { SearchPalette } from "@/components/SearchPalette";
 
 function NotFoundComponent() {
   return (
@@ -54,6 +56,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", type: "image/png", href: "/icon.png" },
+      { rel: "manifest", href: "/manifest.json" },
     ],
   }),
   shellComponent: RootShell,
@@ -71,13 +74,24 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ServiceWorkerRegister() {
+  useEffect(() => {
+    if ("serviceWorker" in navigator && "PushManager" in window) {
+      navigator.serviceWorker.register("/sw.js").catch(console.error);
+    }
+  }, []);
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Outlet />
+        <SearchPalette />
         <Toaster richColors position="top-right" />
+        <ServiceWorkerRegister />
       </AuthProvider>
     </QueryClientProvider>
   );

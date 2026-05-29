@@ -7,8 +7,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UsernameBadge } from "@/components/UsernameBadge";
 import { VoiceRoom } from "@/components/VoiceRoom";
 import { Button } from "@/components/ui/button";
+import { getSocket, disconnectSocket } from "@/lib/socket";
 import {
-  Hash, SendHorizontal, Smile, CornerUpLeft, X, Trash2, Pencil, Check, Volume2, ArrowLeft,
+  Hash, SendHorizontal, Smile, CornerUpLeft, X, Trash2, Pencil, Check, Volume2, ArrowLeft, Paperclip,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
@@ -34,11 +35,14 @@ function ChannelView() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [typing, setTyping] = useState<Record<string, { name: string; t: number }>>({});
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState<Msg | null>(null);
   const [editing, setEditing] = useState<Msg | null>(null);
   const [editText, setEditText] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const profilesCache = useRef<Map<string, Msg["author"]>>(new Map());
   const typingChan = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -119,6 +123,17 @@ function ChannelView() {
     return () => { supabase.removeChannel(ch); clearInterval(interval); typingChan.current = null; };
   }, [channelId, user?.id, channel?.type]);
 
+  // Socket.io presence
+  useEffect(() => {
+    if (!user) return;
+    const s = getSocket(user.id);
+    s.on("presence:users", (users: { userId: string; name: string }[]) => {
+      setOnlineUsers(new Set(users.map((u) => u.userId)));
+    });
+    s.on("connect", () => s.emit("presence:join", { userId: user.id, serverId }));
+    return () => { s.off("presence:users"); s.off("connect"); disconnectSocket(); };
+  }, [user?.id, serverId]);
+
   function emitTyping() {
     const now = Date.now();
     if (now - lastTypingSent.current < 2500) return;
@@ -160,6 +175,30 @@ function ChannelView() {
     const { error } = await supabase.from("messages").update({ content, edited_at: new Date().toISOString() }).eq("id", editing.id);
     if (error) return toast.error(error.message);
     setEditing(null);
+  }
+
+  async function uploadFile(file: File) {
+    if (!user || uploading) return;
+    setUploading(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || "";
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("channel_id", channelId);
+      const res = await fetch(`${apiUrl}/api/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` },
+        body: formData,
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Upload falhou"); }
+      const { url } = await res.json();
+      setText((prev) => prev + ` ${url} `);
+      toast.success("Arquivo anexado");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setUploading(false);
+    }
   }
 
   if (!channel) return <div className="p-8 text-muted-foreground">Carregando canal…</div>;
@@ -280,15 +319,19 @@ function ChannelView() {
                 <button type="button" onClick={() => setReplyTo(null)}><X className="h-3.5 w-3.5" /></button>
               </div>
             )}
-            <div className="relative">
+            <div className="relative flex items-center gap-1">
+              <input type="file" ref={fileRef} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }} />
+              <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()} className="text-muted-foreground hover:text-primary disabled:opacity-40 p-1 shrink-0">
+                <Paperclip className="h-5 w-5" />
+              </button>
               <Input
                 value={text}
                 onChange={(e) => { setText(e.target.value); emitTyping(); }}
                 placeholder={`Mensagem em #${channel.name}`}
-                className="pr-10 bg-input border-border h-11"
+                className="bg-input border-border h-11"
                 maxLength={2000}
               />
-              <button type="submit" disabled={!text.trim() || sending} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary disabled:opacity-40 p-1">
+              <button type="submit" disabled={!text.trim() || sending} className="text-muted-foreground hover:text-primary disabled:opacity-40 p-1 shrink-0">
                 <SendHorizontal className="h-5 w-5" />
               </button>
             </div>
