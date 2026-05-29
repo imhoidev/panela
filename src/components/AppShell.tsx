@@ -50,6 +50,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Fecha o drawer mobile ao navegar
   useEffect(() => { setMobileOpen(false); }, [loc.pathname]);
 
+  // Push: registra SW sempre; re-inscreve silenciosamente se permissão já foi concedida.
+  useEffect(() => {
+    if (!user || !pushSupported()) return;
+    ensureServiceWorker().then(() => {
+      if (Notification.permission === "granted") subscribeToPush().catch(() => {});
+    });
+  }, [user?.id]);
+
   if (!user) return <div className="min-h-screen">{children}</div>;
 
   const activeServerId = loc.pathname.startsWith("/app/servers/") ? loc.pathname.split("/")[3] : null;
