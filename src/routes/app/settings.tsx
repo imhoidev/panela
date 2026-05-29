@@ -81,6 +81,28 @@ function Settings() {
         </ol>
       </Card>
 
+      <Card className="p-5 space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="font-semibold flex items-center gap-2"><Bell className="h-4 w-4" /> Notificações push</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Receba alertas no celular/desktop mesmo com o app fechado.
+            </p>
+          </div>
+          {!supported ? (
+            <Badge variant="outline">Não suportado nesse navegador</Badge>
+          ) : subscribed ? (
+            <Button variant="outline" disabled={busy} onClick={disablePush}>
+              <BellOff className="h-4 w-4 mr-2" /> Desativar
+            </Button>
+          ) : (
+            <Button disabled={busy || perm === "denied"} onClick={enablePush}>
+              <Bell className="h-4 w-4 mr-2" /> {perm === "denied" ? "Bloqueado no navegador" : "Ativar notificações"}
+            </Button>
+          )}
+        </div>
+      </Card>
+
       <Card className="p-5 space-y-2">
         <h2 className="font-semibold">Sobre o PANELA</h2>
         <p className="text-sm text-muted-foreground">PANELA é uma plataforma social de comunidades com sabor de fórum 2008 e velocidade de 2026. Construído com carinho.</p>
