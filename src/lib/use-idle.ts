@@ -1,8 +1,8 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function useIdle(timeoutMs: number = 300000): boolean {
   const [idle, setIdle] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<any>();
 
   useEffect(() => {
     function reset() {

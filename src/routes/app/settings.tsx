@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { StatusPicker, StatusDot } from "@/components/PresenceStatus";
 import {
-  Info, Check,
+  User, Shield, Info, Check, Bell, BellOff, Loader2, Copy, LogOut, MessageSquare,
 } from "lucide-react";
 
 export const Route = createFileRoute("/app/settings")({
