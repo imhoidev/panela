@@ -159,7 +159,7 @@ function MemberRow({ member, status }: { member: MemberWithProfile; status: stri
 
   return (
     <Link
-      to="/app/profile/$slug"
+      to="/app/u/$slug"
       params={{ slug: member.user_id }}
       className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/40 transition-colors group"
     >

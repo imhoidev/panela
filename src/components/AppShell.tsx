@@ -164,7 +164,8 @@ function NavBlock({
           </Link>
         )}
       </nav>
-      <div className="p-3 border-t border-sidebar-border flex items-center gap-2 min-h-[3.5rem]">
+      <Link to="/app/u/$slug" params={{ slug: profile?.username ?? "" }}
+        className="p-3 border-t border-sidebar-border flex items-center gap-2 min-h-[3.5rem] hover:bg-sidebar-accent/40 transition-colors">
         <Avatar className="h-9 w-9 shrink-0">
           <AvatarImage src={profile?.avatar_url ?? undefined} />
           <AvatarFallback>{profile?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
@@ -176,10 +177,10 @@ function NavBlock({
           </div>
           <div className="truncate text-xs text-muted-foreground">@{profile?.username}</div>
         </div>
-        <Button size="icon" variant="ghost" onClick={onSignOut} title="Sair" className="h-8 w-8 shrink-0">
+        <Button size="icon" variant="ghost" onClick={(e: any) => { e.preventDefault(); onSignOut(); }} title="Sair" className="h-8 w-8 shrink-0">
           <LogOut className="h-4 w-4" />
         </Button>
-      </div>
+      </Link>
     </>
   );
 }

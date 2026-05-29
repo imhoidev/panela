@@ -15,12 +15,12 @@ import {
   Server, Medal, Award, Star, TrendingUp, Hash, Users,
 } from "lucide-react";
 
-export const Route = createFileRoute("/app/profile/$slug")({
+export const Route = createFileRoute("/app/u/$slug")({
   component: PublicProfile,
 });
 
 function PublicProfile() {
-  const { slug } = useParams({ from: "/app/profile/$slug" });
+  const { slug } = useParams({ from: "/app/u/$slug" });
   const { user } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [roles, setRoles] = useState<string[]>([]);
