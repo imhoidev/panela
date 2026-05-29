@@ -9,6 +9,7 @@ const PORT = Number(process.env.PORT) || 3001;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const LIVEKIT_URL = process.env.LIVEKIT_URL;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
@@ -20,6 +21,7 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 }
 
 const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const sbAdmin = SUPABASE_SERVICE_ROLE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) : sb;
 
 const rateLimitMap = new Map();
 const RATE_WINDOW = 60_000;
@@ -295,6 +297,49 @@ io.on("connection", (socket) => {
     }
   });
 });
+
+async function sendPushForMessage(msg) {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+  if (!msg.content && !msg.attachment_url) return;
+  try {
+    const { data: ch } = await sbAdmin.from("channels").select("server_id, name").eq("id", msg.channel_id).maybeSingle();
+    if (!ch) return;
+    const { data: members } = await sbAdmin.from("server_members").select("user_id").eq("server_id", ch.server_id);
+    if (!members?.length) return;
+    const { data: author } = await sbAdmin.from("profiles").select("username, display_name").eq("id", msg.author_id).maybeSingle();
+    const authorName = author?.display_name || author?.username || "Alguém";
+    const preview = msg.attachment_url ? "[Arquivo]" : (msg.content?.slice(0, 120) || "");
+    const targets = members.filter((m) => m.user_id !== msg.author_id).map((m) => m.user_id);
+    if (!targets.length) return;
+    const { data: subs } = await sbAdmin.from("push_subscriptions").select("*").in("user_id", targets);
+    if (!subs?.length) return;
+    for (const sub of subs) {
+      try {
+        await webpush.sendNotification({
+          endpoint: sub.endpoint, keys: { p256dh: sub.p256dh || "", auth: sub.auth || "" },
+        }, JSON.stringify({
+          title: `#${ch.name} · ${authorName}`,
+          body: preview, icon: "/icon.png", badge: "/icon.png",
+          data: { url: `/app/servers/${msg.channel_id}` },
+          tag: `ch:${msg.channel_id}`, vibrate: [100, 50, 100],
+        }));
+      } catch (e) {
+        if (e.statusCode === 410) await sbAdmin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+      }
+    }
+  } catch (e) {
+    console.error("[push-send] error:", e.message);
+  }
+}
+
+if (SUPABASE_SERVICE_ROLE_KEY) {
+  sbAdmin.channel("push-watch")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+      sendPushForMessage(payload.new);
+    })
+    .subscribe();
+  console.log("[panela-backend] Push notification listener active");
+}
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`[panela-backend] API + Socket.io listening on :${PORT}`);

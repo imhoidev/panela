@@ -19,6 +19,7 @@ const EMOJIS = ["👍", "❤️", "🔥", "😂", "🥹", "🤝", "👀", "🎉"
 type Msg = {
   id: string; content: string | null; created_at: string; author_id: string; channel_id: string;
   reply_to: string | null; edited_at: string | null;
+  attachment_url: string | null; attachment_type: string | null;
   author?: { username: string; display_name: string | null; avatar_url: string | null; name_color: string | null; name_colors: any; name_effect: string | null; current_plan: string } | null;
 };
 type Reaction = { id: string; message_id: string; emoji: string; user_id: string };
@@ -291,10 +292,22 @@ function ChannelView() {
                         <Button size="icon" variant="ghost" onClick={() => setEditing(null)}><X className="h-4 w-4" /></Button>
                       </div>
                     ) : (
-                      <p className="text-sm whitespace-pre-wrap break-words">
-                        {m.content}
-                        {m.edited_at && <span className="text-[10px] text-muted-foreground ml-1">(editado)</span>}
-                      </p>
+                      <div>
+                        <p className="text-sm whitespace-pre-wrap break-words">
+                          {m.content}
+                          {m.edited_at && <span className="text-[10px] text-muted-foreground ml-1">(editado)</span>}
+                        </p>
+                        {m.attachment_url && (
+                          <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"
+                            className="mt-1.5 inline-flex items-center gap-2 rounded-lg border border-border bg-accent/30 px-3 py-2 text-sm hover:bg-accent/60 transition-colors">
+                            {m.attachment_type?.startsWith("image/") ? (
+                              <img src={m.attachment_url} alt="attachment" className="max-h-48 rounded object-contain" />
+                            ) : (
+                              <><Paperclip className="h-4 w-4 text-muted-foreground" /><span className="truncate text-muted-foreground">{m.attachment_url.split("/").pop()}</span></>
+                            )}
+                          </a>
+                        )}
+                      </div>
                     )}
                     {myRx.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
