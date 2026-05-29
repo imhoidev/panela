@@ -51,7 +51,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "Comunidades, chamadas, chat — com a calma de 2008 e a velocidade de 2026." },
       { property: "og:type", content: "website" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/png", href: "/icon.png" },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
