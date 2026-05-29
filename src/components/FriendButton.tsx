@@ -44,13 +44,15 @@ export function FriendButton({ targetUserId }: { targetUserId: string }) {
         return;
       }
     }
-    const { data: conv } = await supabase.from("dm_conversations").insert({}).select().single();
-    if (!conv) return;
+    // Pre-generate UUID so we don't need to SELECT after INSERT (avoids RLS chicken-and-egg)
+    const convId = crypto.randomUUID();
+    const { error } = await supabase.from("dm_conversations").insert({ id: convId });
+    if (error) { toast.error(error.message); return; }
     await supabase.from("dm_participants").insert([
-      { conversation_id: conv.id, user_id: user.id },
-      { conversation_id: conv.id, user_id: targetUserId },
+      { conversation_id: convId, user_id: user.id },
+      { conversation_id: convId, user_id: targetUserId },
     ]);
-    navigate({ to: "/app/dms/$conversationId", params: { conversationId: conv.id } });
+    navigate({ to: "/app/dms/$conversationId", params: { conversationId: convId } });
   }
 
   async function addFriend() {
