@@ -16,6 +16,35 @@ export const Route = createFileRoute("/app/settings")({
 
 function Settings() {
   const { user, profile, roles, signOut } = useAuth();
+  const supported = pushSupported();
+  const [perm, setPerm] = useState<NotificationPermission>(typeof Notification !== "undefined" ? Notification.permission : "default");
+  const [subscribed, setSubscribed] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!supported) return;
+    navigator.serviceWorker.getRegistration().then(async (reg) => {
+      const sub = await reg?.pushManager.getSubscription();
+      setSubscribed(!!sub);
+    });
+  }, [supported]);
+
+  async function enablePush() {
+    setBusy(true);
+    const ok = await subscribeToPush();
+    setBusy(false);
+    setPerm(Notification.permission);
+    setSubscribed(ok);
+    if (ok) toast.success("Notificações ativadas!");
+    else toast.error("Não foi possível ativar. Verifique a permissão do navegador.");
+  }
+  async function disablePush() {
+    setBusy(true);
+    await unsubscribeFromPush();
+    setBusy(false);
+    setSubscribed(false);
+    toast.message("Notificações desativadas.");
+  }
 
   async function copyId() {
     if (!user) return;
