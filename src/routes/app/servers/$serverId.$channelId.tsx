@@ -46,6 +46,7 @@ function ChannelView() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const profilesCache = useRef<Map<string, Msg["author"]>>(new Map());
   const typingChan = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const sockRef = useRef<ReturnType<typeof getSocket> | null>(null);
   const lastTypingSent = useRef(0);
 
   async function fetchProfile(uid: string): Promise<Msg["author"]> {
@@ -82,10 +83,10 @@ function ChannelView() {
 
   useEffect(() => { setMessages([]); setReactions([]); setReplyTo(null); setEditing(null); load(); }, [channelId]);
 
-  // Realtime: mensagens + reações + typing presence
+  // Realtime: mensagens + reações (via Supabase)
   useEffect(() => {
     if (!channel || channel.type === "voice") return;
-    const ch = supabase.channel(`channel-${channelId}`, { config: { presence: { key: user?.id ?? "anon" } } })
+    const ch = supabase.channel(`channel-${channelId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `channel_id=eq.${channelId}` },
         async (payload) => {
           const m = payload.new as Msg;
@@ -106,12 +107,36 @@ function ChannelView() {
           if (payload.eventType === "INSERT") setReactions((p) => [...p, payload.new as Reaction]);
           else if (payload.eventType === "DELETE") setReactions((p) => p.filter((r) => r.id !== (payload.old as any).id));
         })
-      .on("broadcast", { event: "typing" }, ({ payload }) => {
-        if (!payload?.user_id || payload.user_id === user?.id) return;
-        setTyping((prev) => ({ ...prev, [payload.user_id]: { name: payload.name, t: Date.now() } }));
-      })
       .subscribe();
     typingChan.current = ch;
+    return () => { supabase.removeChannel(ch); typingChan.current = null; };
+  }, [channelId, user?.id, channel?.type]);
+
+  // Socket.io: presence + channel join + typing
+  useEffect(() => {
+    if (!user) return;
+    const s = getSocket(user.id);
+    sockRef.current = s;
+
+    const onConnect = () => {
+      s.emit("presence:join", { userId: user.id, serverId });
+      if (channelId) s.emit("channel:join", channelId);
+    };
+    const onUsers = (users: { userId: string; name: string }[]) => setOnlineUsers(new Set(users.map((u) => u.userId)));
+    const onTypingStart = ({ userId: uid, username }: { userId: string; username: string }) => {
+      if (uid === user.id) return;
+      setTyping((prev) => ({ ...prev, [uid]: { name: username, t: Date.now() } }));
+    };
+    const onTypingStop = ({ userId: uid }: { userId: string }) => {
+      setTyping((prev) => { const n = { ...prev }; delete n[uid]; return n; });
+    };
+
+    if (s.connected) onConnect();
+    s.on("connect", onConnect);
+    s.on("presence:users", onUsers);
+    s.on("typing:start", onTypingStart);
+    s.on("typing:stop", onTypingStop);
+
     const interval = setInterval(() => {
       setTyping((prev) => {
         const now = Date.now();
@@ -120,25 +145,25 @@ function ChannelView() {
         return next;
       });
     }, 1000);
-    return () => { supabase.removeChannel(ch); clearInterval(interval); typingChan.current = null; };
-  }, [channelId, user?.id, channel?.type]);
 
-  // Socket.io presence
-  useEffect(() => {
-    if (!user) return;
-    const s = getSocket(user.id);
-    s.on("presence:users", (users: { userId: string; name: string }[]) => {
-      setOnlineUsers(new Set(users.map((u) => u.userId)));
-    });
-    s.on("connect", () => s.emit("presence:join", { userId: user.id, serverId }));
-    return () => { s.off("presence:users"); s.off("connect"); disconnectSocket(); };
-  }, [user?.id, serverId]);
+    return () => {
+      clearInterval(interval);
+      s.off("connect", onConnect);
+      s.off("presence:users", onUsers);
+      s.off("typing:start", onTypingStart);
+      s.off("typing:stop", onTypingStop);
+      if (channelId) s.emit("channel:leave", channelId);
+      sockRef.current = null;
+    };
+  }, [user?.id, serverId, channelId]);
 
   function emitTyping() {
+    const s = sockRef.current;
+    if (!s) return;
     const now = Date.now();
     if (now - lastTypingSent.current < 2500) return;
     lastTypingSent.current = now;
-    typingChan.current?.send({ type: "broadcast", event: "typing", payload: { user_id: user?.id, name: profile?.display_name || profile?.username } });
+    s.emit("typing:start", { channelId, username: profile?.display_name || profile?.username });
   }
 
   async function send(e: React.FormEvent) {
@@ -214,6 +239,10 @@ function ChannelView() {
         {isVoice ? <Volume2 className="h-5 w-5 text-muted-foreground" /> : <Hash className="h-5 w-5 text-muted-foreground" />}
         <h2 className="font-semibold truncate">{channel.name}</h2>
         {channel.topic && <span className="text-sm text-muted-foreground border-l border-border pl-3 ml-1 truncate hidden sm:inline">{channel.topic}</span>}
+        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
+          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+          {onlineUsers.size}
+        </div>
       </header>
 
       {isVoice ? (
