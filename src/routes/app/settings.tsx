@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { pushSupported, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
+import { useEffect, useState } from "react";
+import { Bell, BellOff } from "lucide-react";
 
 export const Route = createFileRoute("/app/settings")({
   head: () => ({ meta: [{ title: "Configurações — PANELA" }] }),
@@ -13,6 +16,35 @@ export const Route = createFileRoute("/app/settings")({
 
 function Settings() {
   const { user, profile, roles, signOut } = useAuth();
+  const supported = pushSupported();
+  const [perm, setPerm] = useState<NotificationPermission>(typeof Notification !== "undefined" ? Notification.permission : "default");
+  const [subscribed, setSubscribed] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!supported) return;
+    navigator.serviceWorker.getRegistration().then(async (reg) => {
+      const sub = await reg?.pushManager.getSubscription();
+      setSubscribed(!!sub);
+    });
+  }, [supported]);
+
+  async function enablePush() {
+    setBusy(true);
+    const ok = await subscribeToPush();
+    setBusy(false);
+    setPerm(Notification.permission);
+    setSubscribed(ok);
+    if (ok) toast.success("Notificações ativadas!");
+    else toast.error("Não foi possível ativar. Verifique a permissão do navegador.");
+  }
+  async function disablePush() {
+    setBusy(true);
+    await unsubscribeFromPush();
+    setBusy(false);
+    setSubscribed(false);
+    toast.message("Notificações desativadas.");
+  }
 
   async function copyId() {
     if (!user) return;
@@ -47,6 +79,28 @@ function Settings() {
           <li><b className="text-foreground">Fase 4:</b> Voz/vídeo/screen-share via LiveKit, chamadas em grupo.</li>
           <li><b className="text-foreground">Fase 5:</b> Push notifications (VAPID), AutoMod, eventos, PWA completo.</li>
         </ol>
+      </Card>
+
+      <Card className="p-5 space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="font-semibold flex items-center gap-2"><Bell className="h-4 w-4" /> Notificações push</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Receba alertas no celular/desktop mesmo com o app fechado.
+            </p>
+          </div>
+          {!supported ? (
+            <Badge variant="outline">Não suportado nesse navegador</Badge>
+          ) : subscribed ? (
+            <Button variant="outline" disabled={busy} onClick={disablePush}>
+              <BellOff className="h-4 w-4 mr-2" /> Desativar
+            </Button>
+          ) : (
+            <Button disabled={busy || perm === "denied"} onClick={enablePush}>
+              <Bell className="h-4 w-4 mr-2" /> {perm === "denied" ? "Bloqueado no navegador" : "Ativar notificações"}
+            </Button>
+          )}
+        </div>
       </Card>
 
       <Card className="p-5 space-y-2">

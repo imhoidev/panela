@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
+import { sendChannelPush } from "@/lib/push.functions";
+import { useServerFn } from "@tanstack/react-start";
 
 const EMOJIS = ["👍", "❤️", "🔥", "😂", "🥹", "🤝", "👀", "🎉", "💯", "🍳"];
 
@@ -126,6 +128,7 @@ function ChannelView() {
     typingChan.current?.send({ type: "broadcast", event: "typing", payload: { user_id: user?.id, name: profile?.display_name || profile?.username } });
   }
 
+  const pushFn = useServerFn(sendChannelPush);
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!user || !text.trim() || sending) return;
@@ -134,7 +137,16 @@ function ChannelView() {
     setText(""); const reply = replyTo?.id ?? null; setReplyTo(null);
     const { error } = await supabase.from("messages").insert({ channel_id: channelId, author_id: user.id, content, reply_to: reply });
     setSending(false);
-    if (error) { setText(content); toast.error(error.message); }
+    if (error) { setText(content); toast.error(error.message); return; }
+    // Notifica membros do canal (fire-and-forget).
+    const senderName = profile?.display_name || profile?.username || "alguém";
+    pushFn({ data: {
+      channelId,
+      title: `#${channel?.name ?? "canal"} · ${senderName}`,
+      body: content.slice(0, 240),
+      url: `/app/servers/${serverId}/${channelId}`,
+      tag: `ch-${channelId}`,
+    } }).catch(() => {});
   }
 
   async function react(msg: Msg, emoji: string) {

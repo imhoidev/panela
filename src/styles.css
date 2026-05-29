@@ -180,3 +180,13 @@
   .voice-controls .lk-button span { display: none; }
   .voice-controls .lk-button { padding: 0 !important; width: 2.5rem !important; }
 }
+
+/* LiveKit focus + carousel sizing */
+.lk-focus-wrap { display: flex; min-height: 0; }
+.lk-focus-wrap > .lk-focus-layout { flex: 1; min-height: 0; height: 100%; }
+.lk-focus-wrap .lk-participant-tile { height: 100%; border-radius: 0.75rem; overflow: hidden; }
+.lk-grid-layout { gap: 0.5rem; }
+.lk-grid-layout .lk-participant-tile { border-radius: 0.75rem; overflow: hidden; }
+.lk-carousel { gap: 0.5rem; }
+.lk-carousel .lk-participant-tile { border-radius: 0.75rem; overflow: hidden; cursor: pointer; }
+.lk-participant-tile[data-lk-pinned="true"] { outline: 2px solid var(--color-primary); outline-offset: -2px; }

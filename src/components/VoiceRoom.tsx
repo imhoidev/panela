@@ -1,11 +1,21 @@
 import "@livekit/components-styles";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  LiveKitRoom, GridLayout, ParticipantTile, useTracks, RoomAudioRenderer, ControlBar,
+  LiveKitRoom,
+  GridLayout,
+  ParticipantTile,
+  RoomAudioRenderer,
+  ControlBar,
+  LayoutContextProvider,
+  FocusLayout,
+  CarouselLayout,
+  useTracks,
+  usePinnedTracks,
+  useParticipants,
 } from "@livekit/components-react";
 import { Track } from "livekit-client";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, PhoneOff, Phone, Sparkles } from "lucide-react";
+import { Loader2, PhoneOff, Phone, Sparkles, Maximize2, Minimize2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -77,37 +87,16 @@ export function VoiceRoom({
       onDisconnected={() => { setJoined(false); setToken(null); }}
       className="h-full"
     >
-      <div className="flex flex-col h-full bg-gradient-to-b from-background to-card/40">
-        <div className="flex-1 min-h-0 overflow-auto p-3 sm:p-4">
-          <Stage />
-        </div>
-        <div className="border-t border-border bg-card/70 backdrop-blur supports-[backdrop-filter]:bg-card/60 px-3 sm:px-5 py-3 sm:py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="mx-auto max-w-3xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div className="flex-1 min-w-0 flex items-center justify-center sm:justify-start">
-              <div className="voice-controls flex items-center gap-2 sm:gap-3 rounded-full bg-background/60 border border-border px-2 sm:px-3 py-1.5">
-                <ControlBar
-                  variation="minimal"
-                  controls={{ microphone: true, camera: true, screenShare: true, chat: false, leave: false }}
-                />
-              </div>
-            </div>
-            <Button
-              variant="destructive"
-              size="lg"
-              className="h-11 rounded-full px-5 shrink-0"
-              onClick={() => { setJoined(false); setToken(null); }}
-            >
-              <PhoneOff className="h-4 w-4 mr-2" /> Sair
-            </Button>
-          </div>
-        </div>
-      </div>
+      <LayoutContextProvider>
+        <Stage onLeave={() => { setJoined(false); setToken(null); }} />
+      </LayoutContextProvider>
       <RoomAudioRenderer />
     </LiveKitRoom>
   );
 }
 
-function Stage() {
+function Stage({ onLeave }: { onLeave: () => void }) {
+  const participants = useParticipants();
   const tracks = useTracks(
     [
       { source: Track.Source.Camera, withPlaceholder: true },
@@ -115,9 +104,91 @@ function Stage() {
     ],
     { onlySubscribed: false },
   );
+
+  const screenShares = useMemo(
+    () => tracks.filter((t) => t.source === Track.Source.ScreenShare),
+    [tracks],
+  );
+
+  // Pinned trumps everything; else, auto-focus first active screen share.
+  const pinned = usePinnedTracks();
+  const focusTrack = pinned?.[0] ?? screenShares[0] ?? null;
+  const carouselTracks = useMemo(
+    () => (focusTrack ? tracks.filter((t) => t !== focusTrack) : tracks),
+    [tracks, focusTrack],
+  );
+
+  const [fullscreen, setFullscreen] = useState(false);
+  const toggleFs = async () => {
+    try {
+      if (!document.fullscreenElement) { await document.documentElement.requestFullscreen(); setFullscreen(true); }
+      else { await document.exitFullscreen(); setFullscreen(false); }
+    } catch {}
+  };
+
   return (
-    <GridLayout tracks={tracks} style={{ height: "100%" }}>
-      <ParticipantTile />
-    </GridLayout>
+    <div className="flex flex-col h-full bg-gradient-to-b from-background to-card/40">
+      <div className="flex items-center justify-between px-3 sm:px-5 py-2 border-b border-border bg-card/40 backdrop-blur">
+        <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+          <Users className="h-4 w-4" />
+          <span>{participants.length} {participants.length === 1 ? "pessoa" : "pessoas"}</span>
+          {screenShares.length > 0 && (
+            <span className="ml-2 hidden sm:inline rounded-full bg-primary/15 text-primary px-2 py-0.5 border border-primary/30 text-[11px]">
+              {screenShares.length} transmissão{screenShares.length > 1 ? "ões" : ""}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleFs} title="Tela cheia">
+            {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-hidden p-2 sm:p-3">
+        {focusTrack ? (
+          <div className="flex flex-col lg:flex-row gap-2 h-full">
+            <div className="flex-1 min-h-0 lk-focus-wrap">
+              <FocusLayout trackRef={focusTrack} />
+            </div>
+            {carouselTracks.length > 0 && (
+              <div className="lg:w-48 lg:h-full h-28 shrink-0 overflow-auto">
+                <CarouselLayout tracks={carouselTracks} orientation="vertical">
+                  <ParticipantTile />
+                </CarouselLayout>
+              </div>
+            )}
+          </div>
+        ) : (
+          <GridLayout tracks={tracks} style={{ height: "100%" }}>
+            <ParticipantTile />
+          </GridLayout>
+        )}
+      </div>
+
+      <div className="border-t border-border bg-card/70 backdrop-blur supports-[backdrop-filter]:bg-card/60 px-3 sm:px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-3xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <p className="text-[11px] text-muted-foreground text-center sm:text-left hidden sm:block">
+            Toque num bloco pra fixar · Clique numa transmissão pra colocar em foco
+          </p>
+          <div className="flex-1 sm:flex-none flex items-center justify-center">
+            <div className="voice-controls flex items-center gap-2 sm:gap-3 rounded-full bg-background/60 border border-border px-2 sm:px-3 py-1.5">
+              <ControlBar
+                variation="minimal"
+                controls={{ microphone: true, camera: true, screenShare: true, chat: false, leave: false }}
+              />
+            </div>
+          </div>
+          <Button
+            variant="destructive"
+            size="lg"
+            className="h-11 rounded-full px-5 shrink-0"
+            onClick={onLeave}
+          >
+            <PhoneOff className="h-4 w-4 mr-2" /> Sair
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

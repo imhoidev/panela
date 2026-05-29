@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureServiceWorker, subscribeToPush, pushSupported } from "@/lib/push";
 
 type ServerLite = { id: string; name: string; icon_url: string | null };
 
@@ -48,6 +49,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // Fecha o drawer mobile ao navegar
   useEffect(() => { setMobileOpen(false); }, [loc.pathname]);
+
+  // Push: registra SW sempre; re-inscreve silenciosamente se permissão já foi concedida.
+  useEffect(() => {
+    if (!user || !pushSupported()) return;
+    ensureServiceWorker().then(() => {
+      if (Notification.permission === "granted") subscribeToPush().catch(() => {});
+    });
+  }, [user?.id]);
 
   if (!user) return <div className="min-h-screen">{children}</div>;
 
