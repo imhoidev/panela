@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -84,7 +84,7 @@ function ServerLayout() {
   async function loadMembers() {
     const { data } = await supabase
       .from("server_members")
-      .select("user_id, level, profiles!inner(username,display_name,avatar_url)")
+      .select("user_id, level, xp, profiles!inner(username,display_name,avatar_url)")
       .eq("server_id", serverId);
     setMembers(data ?? []);
   }
@@ -265,34 +265,32 @@ function ChannelsBlock({
         <div className="flex items-center justify-between px-2 py-1 text-xs uppercase tracking-wide text-muted-foreground">
           <span className="font-semibold">Canais</span>
           {canManage && (
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild><button className="hover:text-foreground p-0.5"><Plus className="h-3.5 w-3.5" /></button></DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Novo canal</DialogTitle></DialogHeader>
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label>Tipo</Label>
-                    <Select value={newType} onValueChange={(v: any) => setNewType(v)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="text">Texto</SelectItem>
-                        <SelectItem value="voice">Voz</SelectItem>
-                        <SelectItem value="announcement">Anúncios</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Nome</Label>
-                    <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="nome-do-canal" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Categoria (opcional)</Label>
-                    <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="ex: Geral, Voz, Jogos" />
-                  </div>
-                  <Button onClick={addChannel} className="w-full">Criar</Button>
+            <ResponsiveDialog open={open} onOpenChange={setOpen}
+              title="Novo canal"
+              trigger={<button className="hover:text-foreground p-0.5"><Plus className="h-3.5 w-3.5" /></button>}>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Tipo</Label>
+                  <Select value={newType} onValueChange={(v: any) => setNewType(v)}>
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="text">Texto</SelectItem>
+                      <SelectItem value="voice">Voz</SelectItem>
+                      <SelectItem value="announcement">Anúncios</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              </DialogContent>
-            </Dialog>
+                <div className="space-y-1.5">
+                  <Label>Nome</Label>
+                  <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="nome-do-canal" className="h-10" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Categoria (opcional)</Label>
+                  <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="ex: Geral, Voz, Jogos" className="h-10" />
+                </div>
+                <Button onClick={addChannel} className="w-full h-10">Criar</Button>
+              </div>
+            </ResponsiveDialog>
           )}
         </div>
 
@@ -437,7 +435,8 @@ function ServerSettingsPanel({
             <div className="space-y-1">
               {filteredMembers.map((m: any) => {
                 const p = m.profiles;
-                const online = presence.has(m.user_id);
+                const status = presence.get(m.user_id);
+                const online = status != null;
                 return (
                   <div key={m.user_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/30">
                     <Avatar className="h-9 w-9">
@@ -446,13 +445,13 @@ function ServerSettingsPanel({
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <StatusDot status={online ? (presence.get(m.user_id) || "online") : "offline"} />
+                        <StatusDot status={online ? status : "offline"} />
                         <p className="text-sm font-medium truncate">{p?.display_name || p?.username}</p>
                         {m.user_id === server.owner_id && <Crown className="h-3.5 w-3.5 text-gold" />}
                       </div>
                       <p className="text-xs text-muted-foreground">Nível {m.level} · @{p?.username}</p>
                     </div>
-                    <LevelBadge xp={0} size="sm" />
+                    <LevelBadge xp={m.xp ?? 0} size="sm" />
                     {canKick && m.user_id !== server.owner_id && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => kickMember(m.user_id)}>
                         <UserMinus className="h-4 w-4" />

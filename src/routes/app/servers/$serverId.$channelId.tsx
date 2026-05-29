@@ -341,7 +341,7 @@ function ChannelView() {
               return (
                 <div key={m.id} className={`group relative flex gap-3 hover:bg-accent/30 px-2 py-0.5 rounded ${sameAuthor ? "pl-13" : "pt-2"}`}>
                   {!sameAuthor ? (
-                    <Link to="/app/profile/$userId" params={{ userId: m.author_id }}
+                    <Link to="/app/profile/$slug" params={{ slug: m.author_id }}
                       className="h-10 w-10 mt-0.5 shrink-0 rounded-full overflow-hidden hover:ring-2 ring-primary/60 transition-all">
                       <Avatar className="h-full w-full">
                         <AvatarImage src={m.author?.avatar_url ?? undefined} />

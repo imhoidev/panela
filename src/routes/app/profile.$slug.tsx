@@ -15,12 +15,12 @@ import {
   Server, Medal, Award, Star, TrendingUp, Hash, Users,
 } from "lucide-react";
 
-export const Route = createFileRoute("/app/profile/$userId")({
+export const Route = createFileRoute("/app/profile/$slug")({
   component: PublicProfile,
 });
 
 function PublicProfile() {
-  const { userId } = useParams({ from: "/app/profile/$userId" });
+  const { slug } = useParams({ from: "/app/profile/$slug" });
   const { user } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [roles, setRoles] = useState<string[]>([]);
@@ -29,33 +29,50 @@ function PublicProfile() {
   const [stats, setStats] = useState<any>(null);
   const [friendsCount, setFriendsCount] = useState(0);
   const [activeTab, setActiveTab] = useState("about");
-  const isOwn = user?.id === userId;
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const isOwn = user?.id != null && (user.id === slug || user.id === targetId);
 
   useEffect(() => {
-    if (!userId) return;
-    supabase.from("profiles").select("*").eq("id", userId).maybeSingle().then(({ data }) => setProfile(data));
-    supabase.from("user_roles").select("role").eq("user_id", userId).then(({ data }) => setRoles((data ?? []).map((r: any) => r.role)));
-    supabase.from("profile_stats").select("*").eq("user_id", userId).maybeSingle().then(({ data }) => setStats(data));
+    if (!slug) return;
+    setTargetId(null);
+    let cancelled = false;
+    async function load() {
+      // Look up by username first (as slug), fallback to UUID
+      let { data: profile } = await supabase.from("profiles").select("*").eq("username", slug).maybeSingle();
+      if (!profile) {
+        const uuidPat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidPat.test(slug)) {
+          ({ data: profile } = await supabase.from("profiles").select("*").eq("id", slug).maybeSingle());
+        }
+      }
+      if (cancelled || !profile) { if (!cancelled) setProfile(null); return; }
+      const uid = profile.id;
+      setProfile(profile);
+      setTargetId(uid);
 
-    supabase.from("friends").select("id", { count: "exact", head: true })
-      .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
-      .eq("status", "accepted")
-      .then(({ count }) => setFriendsCount(count ?? 0));
+      supabase.from("user_roles").select("role").eq("user_id", uid).then(({ data }) => setRoles((data ?? []).map((r: any) => r.role)));
+      supabase.from("profile_stats").select("*").eq("user_id", uid).maybeSingle().then(({ data }) => setStats(data));
 
-    // Servers in common
-    if (user) {
-      supabase.from("server_members").select("server_id").eq("user_id", userId).then(async ({ data }) => {
-        if (!data?.length) return;
-        const ids = data.map((m) => m.server_id);
-        const { data: sv } = await supabase.from("servers").select("id, name, icon_url, privacy").in("id", ids);
-        setServers(sv ?? []);
-      });
+      supabase.from("friends").select("id", { count: "exact", head: true })
+        .or(`user_id.eq.${uid},friend_id.eq.${uid}`)
+        .eq("status", "accepted")
+        .then(({ count }) => setFriendsCount(count ?? 0));
+
+      if (user) {
+        supabase.from("server_members").select("server_id").eq("user_id", uid).then(async ({ data }) => {
+          if (!data?.length) return;
+          const ids = data.map((m) => m.server_id);
+          const { data: sv } = await supabase.from("servers").select("id, name, icon_url, privacy").in("id", ids);
+          if (!cancelled) setServers(sv ?? []);
+        });
+      }
+      supabase.from("server_xp").select("xp, servers(name, icon_url, id)")
+        .eq("user_id", uid).order("xp", { ascending: false }).limit(10)
+        .then(({ data }) => { if (!cancelled) setServerXp(data ?? []); });
     }
-    // XP per server
-    supabase.from("server_xp").select("xp, servers(name, icon_url, id)")
-      .eq("user_id", userId).order("xp", { ascending: false }).limit(10)
-      .then(({ data }) => setServerXp(data ?? []));
-  }, [userId]);
+    load();
+    return () => { cancelled = true; };
+  }, [slug, user?.id]);
 
   if (!profile) return <div className="p-8 text-muted-foreground text-center">Carregando…</div>;
 
@@ -82,7 +99,7 @@ function PublicProfile() {
                 <div className="text-xl md:text-2xl font-bold">
                   <UsernameBadge profile={profile} roles={roles} />
                 </div>
-                {!isOwn && <FriendButton targetUserId={userId} />}
+                {targetId && !isOwn && <FriendButton targetUserId={targetId} />}
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-1.5 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1"><AtSign className="h-3.5 w-3.5" />@{profile.username}</span>
@@ -260,3 +277,4 @@ function PublicProfile() {
     </div>
   );
 }
+

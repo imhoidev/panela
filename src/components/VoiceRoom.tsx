@@ -2,7 +2,7 @@ import "@livekit/components-styles";
 import { useEffect, useState, useCallback } from "react";
 import {
   LiveKitRoom, ParticipantTile, useTracks, useRemoteParticipants, useLocalParticipant,
-  RoomAudioRenderer, ControlBar,
+  RoomAudioRenderer, ControlBar, TrackRefContext,
 } from "@livekit/components-react";
 import { Track } from "livekit-client";
 import { supabase } from "@/integrations/supabase/client";
@@ -143,12 +143,26 @@ function StageInner({
     ? all.find((p) => p.identity === focusedId)
     : (screenshareTrack ? all.find((p) => p.identity === screenshareTrack.participant.identity) : null);
 
+  function trackFor(participant: any) {
+    return tracks.find((t) => t.participant.identity === participant.identity);
+  }
+
+  function Tile({ participant, className }: { participant: any; className?: string }) {
+    const tr = trackFor(participant);
+    if (!tr) return null;
+    return (
+      <TrackRefContext.Provider value={tr}>
+        <ParticipantTile className={className} />
+      </TrackRefContext.Provider>
+    );
+  }
+
   if (focusTarget) {
     const others = all.filter((p) => p.identity !== focusTarget.identity);
     return (
-      <div className={`h-full flex ${fullScreenId ? "flex-col" : "flex-col"}`}>
+      <div className={`h-full flex flex-col`}>
         <div className="relative flex-1 min-h-0">
-          <ParticipantTile participant={focusTarget} />
+          <Tile participant={focusTarget} />
           <div className="absolute top-2 right-2 flex gap-1.5 z-10">
             <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70"
               onClick={() => onFullscreen(focusTarget.identity)}>
@@ -161,7 +175,7 @@ function StageInner({
             {others.map((p) => (
               <div key={p.identity} onClick={() => onFocus(p.identity)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onFocus(p.identity); }}
                 className="relative w-36 h-24 rounded-lg overflow-hidden shrink-0 ring-1 ring-border hover:ring-primary transition-all cursor-pointer">
-                <ParticipantTile participant={p} />
+                <Tile participant={p} />
                 {p.isScreenShareEnabled && (
                   <span className="absolute top-1 left-1 bg-primary/80 text-primary-foreground text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 pointer-events-none">
                     <Monitor className="h-3 w-3" /> Tela
@@ -179,7 +193,7 @@ function StageInner({
     return (
       <div className="h-full flex flex-col gap-2 sm:grid sm:grid-cols-2 sm:grid-rows-1">
         {all.map((p) => (
-          <ParticipantTileBtn key={p.identity} participant={p} onClick={onFocus} />
+          <ParticipantTileBtn key={p.identity} participant={p} onClick={onFocus} tracks={tracks} />
         ))}
       </div>
     );
@@ -195,17 +209,21 @@ function StageInner({
         gridAutoRows: rows,
       }}>
       {all.map((p) => (
-        <ParticipantTileBtn key={p.identity} participant={p} onClick={onFocus} />
+        <ParticipantTileBtn key={p.identity} participant={p} onClick={onFocus} tracks={tracks} />
       ))}
     </div>
   );
 }
 
-function ParticipantTileBtn({ participant, onClick }: { participant: any; onClick: (id: string) => void }) {
+function ParticipantTileBtn({ participant, onClick, tracks }: { participant: any; onClick: (id: string) => void; tracks: any[] }) {
+  const tr = tracks.find((t) => t.participant.identity === participant.identity);
+  if (!tr) return null;
   return (
     <div onClick={() => onClick(participant.identity)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onClick(participant.identity); }}
       className="relative rounded-xl overflow-hidden ring-1 ring-border hover:ring-primary/60 transition-all cursor-pointer group">
-      <ParticipantTile participant={participant} />
+      <TrackRefContext.Provider value={tr}>
+        <ParticipantTile />
+      </TrackRefContext.Provider>
       {participant.isScreenShareEnabled && (
         <span className="absolute top-1.5 left-1.5 bg-primary/80 text-primary-foreground text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 pointer-events-none z-10">
           <Monitor className="h-3 w-3" /> Tela
