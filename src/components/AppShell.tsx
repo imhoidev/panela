@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureServiceWorker, subscribeToPush, pushSupported } from "@/lib/push";
 
 type ServerLite = { id: string; name: string; icon_url: string | null };
 
