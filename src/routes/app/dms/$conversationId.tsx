@@ -226,13 +226,19 @@ function DMChat() {
         }
       });
     };
+    const onMessageDeleted = ({ messageId }: { messageId: string }) => {
+      knownIds.current.delete(messageId);
+      setMessages((prev) => prev.filter((x) => x.id !== messageId));
+    };
+    const onMessageUpdated = (m: DM) => {
+      setMessages((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x));
+    };
 
     if (s.connected) onConnect();
     s.on("connect", onConnect);
     s.on("presence:users", onUsers);
     s.on("presence:update", onPresenceUpdate);
 
-    // Subscribe to other user's presence
     if (otherId) s.emit("presence:subscribe", [otherId, user.id]);
 
     const typingTimeout = setInterval(() => { setOtherTyping(false); }, 4000);
@@ -240,11 +246,14 @@ function DMChat() {
     s.on("typing:start", onTypingStart);
     s.on("typing:stop", onTypingStop);
     s.on("message:new", onMessageNew);
+    s.on("message:deleted", onMessageDeleted);
+    s.on("message:updated", onMessageUpdated);
 
     return () => {
       clearInterval(typingTimeout);
       s.off("connect", onConnect); s.off("presence:users", onUsers); s.off("presence:update", onPresenceUpdate);
-      s.off("typing:start", onTypingStart); s.off("typing:stop", onTypingStop); s.off("message:new", onMessageNew);
+      s.off("typing:start", onTypingStart); s.off("typing:stop", onTypingStop);
+      s.off("message:new", onMessageNew); s.off("message:deleted", onMessageDeleted); s.off("message:updated", onMessageUpdated);
       if (conversationId) s.emit("dm:leave", conversationId);
       sockRef.current = null;
     };
@@ -300,6 +309,7 @@ function DMChat() {
     if (!confirm("Apagar?")) return;
     knownIds.current.delete(m.id);
     setMessages((prev) => prev.filter((x) => x.id !== m.id));
+    const s = sockRef.current; if (s) s.emit("message:deleted", { conversationId, messageId: m.id });
     await supabase.from("dm_messages").delete().eq("id", m.id);
   }
 

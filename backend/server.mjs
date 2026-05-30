@@ -370,6 +370,14 @@ io.on("connection", (socket) => {
     if (channelId) socket.to(`ch:${channelId}`).emit("message:new", message);
     if (conversationId) socket.to(`dm:${conversationId}`).emit("message:new", message);
   });
+  socket.on("message:deleted", ({ channelId, conversationId, messageId }) => {
+    if (channelId) socket.to(`ch:${channelId}`).emit("message:deleted", { messageId });
+    if (conversationId) socket.to(`dm:${conversationId}`).emit("message:deleted", { messageId });
+  });
+  socket.on("message:updated", ({ channelId, conversationId, message }) => {
+    if (channelId) socket.to(`ch:${channelId}`).emit("message:updated", message);
+    if (conversationId) socket.to(`dm:${conversationId}`).emit("message:updated", message);
+  });
 
   socket.on("presence:set", (status) => {
     if (!["online", "idle", "dnd", "invisible"].includes(status)) return;

@@ -228,11 +228,19 @@ function ChannelView() {
         }
       });
     };
+    const onMessageDeleted = ({ messageId }: { messageId: string }) => {
+      knownIds.current.delete(messageId);
+      setMessages((prev) => prev.filter((x) => x.id !== messageId));
+    };
+    const onMessageUpdated = async (m: Msg) => {
+      m.author = await fetchProfile(m.author_id);
+      setMessages((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x));
+    };
     if (s.connected) onConnect();
     s.on("connect", onConnect); s.on("presence:users", onUsers); s.on("typing:start", onTypingStart); s.on("typing:stop", onTypingStop);
-    s.on("message:new", onMessageNew);
+    s.on("message:new", onMessageNew); s.on("message:deleted", onMessageDeleted); s.on("message:updated", onMessageUpdated);
     const interval = setInterval(() => { setTyping((prev) => { const now = Date.now(); const next: typeof prev = {}; for (const [k, v] of Object.entries(prev)) if (now - v.t < 4000) next[k] = v; return next; }); }, 1000);
-    return () => { clearInterval(interval); s.off("connect", onConnect); s.off("presence:users", onUsers); s.off("typing:start", onTypingStart); s.off("typing:stop", onTypingStop); s.off("message:new", onMessageNew); if (channelId) s.emit("channel:leave", channelId); sockRef.current = null; };
+    return () => { clearInterval(interval); s.off("connect", onConnect); s.off("presence:users", onUsers); s.off("typing:start", onTypingStart); s.off("typing:stop", onTypingStop); s.off("message:new", onMessageNew); s.off("message:deleted", onMessageDeleted); s.off("message:updated", onMessageUpdated); if (channelId) s.emit("channel:leave", channelId); sockRef.current = null; };
   }, [user?.id, serverId, channelId]);
 
   // Scroll detection
@@ -290,10 +298,17 @@ function ChannelView() {
     if (!confirm("Apagar essa mensagem?")) return;
     knownIds.current.delete(m.id);
     setMessages((prev) => prev.filter((x) => x.id !== m.id));
+    const s = sockRef.current; if (s) s.emit("message:deleted", { channelId, messageId: m.id });
     await supabase.from("messages").delete().eq("id", m.id);
   }
 
-  async function saveEdit() { if (!editing) return; const c = editText.trim(); if (!c) return; await supabase.from("messages").update({ content: c, edited_at: new Date().toISOString() }).eq("id", editing.id); setEditing(null); }
+  async function saveEdit() {
+    if (!editing) return; const c = editText.trim(); if (!c) return;
+    await supabase.from("messages").update({ content: c, edited_at: new Date().toISOString() }).eq("id", editing.id);
+    const m = { ...editing, content: c, edited_at: new Date().toISOString() };
+    const s = sockRef.current; if (s) s.emit("message:updated", { channelId, message: m });
+    setEditing(null);
+  }
 
   async function uploadFile(file: File) {
     if (!user || uploading) return; setUploading(true);
