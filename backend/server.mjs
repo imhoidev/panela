@@ -23,6 +23,13 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const sbAdmin = SUPABASE_SERVICE_ROLE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) : sb;
 
+function getAuthedClient(token) {
+  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
 const rateLimitMap = new Map();
 const RATE_WINDOW = 60_000;
 
@@ -190,10 +197,11 @@ async function handleRequest(req, res) {
       if (!filePart || !conversationId) { send(res, json({ error: "file and conversation_id required" }, 400)); return; }
       const bucket = "attachments";
       const path = `dm/${u.id}/${Date.now()}-${filePart.filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-      const { error: upErr } = await sb.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: false });
+      const sbAuth = getAuthedClient(token);
+      const { error: upErr } = await sbAuth.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: false });
       if (upErr) { send(res, json({ error: upErr.message }, 500)); return; }
-      const { data: pub } = sb.storage.from(bucket).getPublicUrl(path);
-      const { data: msg, error: msgErr } = await sbAdmin.from("dm_messages").insert({
+      const { data: pub } = sbAuth.storage.from(bucket).getPublicUrl(path);
+      const { data: msg, error: msgErr } = await sbAuth.from("dm_messages").insert({
         conversation_id: conversationId, author_id: u.id, content: null,
         attachment_url: pub.publicUrl, attachment_type: filePart.contentType,
       }).select("id").single();
@@ -220,10 +228,11 @@ async function handleRequest(req, res) {
 
       const bucket = "attachments";
       const path = `${u.id}/${Date.now()}-${filePart.filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-      const { error: upErr } = await sb.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: false });
+      const sbAuth = getAuthedClient(token);
+      const { error: upErr } = await sbAuth.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: false });
       if (upErr) { send(res, json({ error: upErr.message }, 500)); return; }
-      const { data: pub } = sb.storage.from(bucket).getPublicUrl(path);
-      const { data: msg, error: msgErr } = await sbAdmin.from("messages").insert({ channel_id: channelId, author_id: u.id, content: null, attachment_url: pub.publicUrl, attachment_type: filePart.contentType }).select("id").single();
+      const { data: pub } = sbAuth.storage.from(bucket).getPublicUrl(path);
+      const { data: msg, error: msgErr } = await sbAuth.from("messages").insert({ channel_id: channelId, author_id: u.id, content: null, attachment_url: pub.publicUrl, attachment_type: filePart.contentType }).select("id").single();
       if (msgErr) { send(res, json({ error: msgErr.message }, 500)); return; }
 
       send(res, json({ id: msg.id, url: pub.publicUrl }));
