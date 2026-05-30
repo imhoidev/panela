@@ -361,6 +361,16 @@ io.on("connection", (socket) => {
   socket.on("typing:start", ({ channelId, username }) => { if (!channelId) return; socket.to(`ch:${channelId}`).emit("typing:start", { userId, username }); });
   socket.on("typing:stop", ({ channelId }) => { if (!channelId) return; socket.to(`ch:${channelId}`).emit("typing:stop", { userId }); });
 
+  socket.on("dm:join", (conversationId) => { if (typeof conversationId === "string") socket.join(`dm:${conversationId}`); });
+  socket.on("dm:leave", (conversationId) => { if (typeof conversationId === "string") socket.leave(`dm:${conversationId}`); });
+  socket.on("dm:typing:start", ({ conversationId, username }) => { if (!conversationId) return; socket.to(`dm:${conversationId}`).emit("typing:start", { userId, username }); });
+  socket.on("dm:typing:stop", ({ conversationId }) => { if (!conversationId) return; socket.to(`dm:${conversationId}`).emit("typing:stop", { userId }); });
+
+  socket.on("message:new", ({ channelId, conversationId, message }) => {
+    if (channelId) socket.to(`ch:${channelId}`).emit("message:new", message);
+    if (conversationId) socket.to(`dm:${conversationId}`).emit("message:new", message);
+  });
+
   socket.on("presence:set", (status) => {
     if (!["online", "idle", "dnd", "invisible"].includes(status)) return;
     entry.status = status;

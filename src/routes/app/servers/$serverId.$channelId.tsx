@@ -21,7 +21,7 @@ import { useServerContext } from "./$serverId";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Hash, SendHorizontal, Smile, CornerUpLeft, X, Trash2, Pencil, Check, Volume2, ArrowLeft,
-  Paperclip, MessageSquare, Users, CircleIcon, AtSign, Menu,
+  Paperclip, MessageSquare, Users, CircleIcon, AtSign, Menu, ArrowDown,
 } from "lucide-react";
 
 const EMOJIS = ["👍", "❤️", "🔥", "😂", "🥹", "🤝", "👀", "🎉", "💯", "🍳"];
@@ -37,6 +37,36 @@ type Reaction = { id: string; message_id: string; emoji: string; user_id: string
 export const Route = createFileRoute("/app/servers/$serverId/$channelId")({
   component: ChannelView,
 });
+
+function relativeTime(date: string) {
+  const diff = Date.now() - new Date(date).getTime();
+  if (diff < 5000) return "agora";
+  if (diff < 60000) return `${Math.floor(diff / 1000)}s`;
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+  if (diff < 172800000) return "ontem";
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)}d`;
+  return new Date(date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+function formatTime(date: string) {
+  return new Date(date).toLocaleString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function getDateLabel(date: string) {
+  const d = new Date(date); const now = new Date();
+  if (d.toDateString() === now.toDateString()) return "Hoje";
+  const yest = new Date(now); yest.setDate(yest.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return "Ontem";
+  const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 6);
+  if (d >= weekAgo) return d.toLocaleDateString("pt-BR", { weekday: "long" });
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function getNextLevel(xp: number) {
+  const level = Math.floor(Math.sqrt(xp / 10));
+  return { level, nextXp: (level + 1) ** 2 * 10, progress: (xp % ((level + 1) ** 2 * 10 - level ** 2 * 10)) / ((level + 1) ** 2 * 10 - level ** 2 * 10) };
+}
 
 function ChannelView() {
   const { serverId, channelId } = useParams({ from: "/app/servers/$serverId/$channelId" });
@@ -55,6 +85,8 @@ function ChannelView() {
   const [uploading, setUploading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [pendingMessages, setPendingMessages] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -63,6 +95,9 @@ function ChannelView() {
   const sockRef = useRef<ReturnType<typeof getSocket> | null>(null);
   const lastTypingSent = useRef(0);
   const prevScrollHeight = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const knownIds = useRef<Set<string>>(new Set());
+  const scrollTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   async function fetchProfile(uid: string): Promise<Msg["author"]> {
     if (profilesCache.current.has(uid)) return profilesCache.current.get(uid)!;
@@ -74,10 +109,12 @@ function ChannelView() {
   async function load() {
     const { data: c } = await supabase.from("channels").select("*").eq("id", channelId).maybeSingle();
     setChannel(c);
+    knownIds.current.clear();
     if (!c || c.type === "voice") { setMessages([]); setReactions([]); return; }
     const { data: msgs } = await supabase.from("messages")
       .select("*").eq("channel_id", channelId).is("thread_root", null).order("created_at", { ascending: true }).limit(100);
     const list = (msgs ?? []) as Msg[];
+    list.forEach((m) => knownIds.current.add(m.id));
     const authors = Array.from(new Set(list.map((m) => m.author_id)));
     if (authors.length) {
       const { data: profs } = await supabase.from("profiles").select("id,username,display_name,avatar_url,name_color,name_colors,name_effect,current_plan").in("id", authors);
@@ -94,6 +131,8 @@ function ChannelView() {
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }));
   }
 
+  useEffect(() => { inputRef.current?.focus(); }, [channelId]);
+
   useEffect(() => {
     if (!hasMore || !sentinelRef.current) return;
     const obs = new IntersectionObserver(([entry]) => {
@@ -108,6 +147,7 @@ function ChannelView() {
           const older = (data ?? []).reverse() as Msg[];
           if (older.length < 50) setHasMore(false);
           if (!older.length) { setLoadingMore(false); return; }
+          older.forEach((m) => knownIds.current.add(m.id));
           const authors = Array.from(new Set(older.map((m) => m.author_id)));
           if (authors.length) {
             const { data: profs } = await supabase.from("profiles").select("id,username,display_name,avatar_url,name_color,name_colors,name_effect,current_plan").in("id", authors);
@@ -127,16 +167,23 @@ function ChannelView() {
 
   useEffect(() => { setMessages([]); setReactions([]); setReplyTo(null); setEditing(null); load(); }, [channelId]);
 
+  // Realtime subscription (backup — socket.io is primary)
   useEffect(() => {
     if (!channel || channel.type === "voice") return;
     const ch = supabase.channel(`channel-${channelId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `channel_id=eq.${channelId}` },
         async (payload) => {
           const m = payload.new as Msg;
-          if (m.thread_root) return;
+          if (m.thread_root || knownIds.current.has(m.id)) return;
+          knownIds.current.add(m.id);
           m.author = await fetchProfile(m.author_id);
-          setMessages((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m]);
-          requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }));
+          setMessages((prev) => [...prev, m]);
+          requestAnimationFrame(() => {
+            if (scrollRef.current) {
+              const atBottom = scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight < 150;
+              if (atBottom) scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+            }
+          });
         })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `channel_id=eq.${channelId}` },
         async (payload) => {
@@ -145,7 +192,7 @@ function ChannelView() {
           setMessages((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x));
         })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages", filter: `channel_id=eq.${channelId}` },
-        (payload) => setMessages((prev) => prev.filter((m) => m.id !== (payload.old as any).id)))
+        (payload) => { const id = (payload.old as any).id; knownIds.current.delete(id); setMessages((prev) => prev.filter((m) => m.id !== id)); })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" },
         (payload) => {
           if (payload.eventType === "INSERT") setReactions((p) => [...p, payload.new as Reaction]);
@@ -156,6 +203,7 @@ function ChannelView() {
     return () => { supabase.removeChannel(ch); typingChan.current = null; };
   }, [channelId, user?.id, channel?.type]);
 
+  // Socket.io (instant delivery)
   useEffect(() => {
     if (!user) return;
     const s = getSocket(user.id);
@@ -168,11 +216,43 @@ function ChannelView() {
       if (uid === user.id) return; setTyping((prev) => ({ ...prev, [uid]: { name: username, t: Date.now() } }));
     };
     const onTypingStop = ({ userId: uid }: { userId: string }) => { setTyping((prev) => { const n = { ...prev }; delete n[uid]; return n; }); };
+    const onMessageNew = async (m: Msg) => {
+      if (m.thread_root || knownIds.current.has(m.id) || m.author_id === user.id) return;
+      knownIds.current.add(m.id);
+      m.author = await fetchProfile(m.author_id);
+      setMessages((prev) => [...prev, m]);
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          const atBottom = scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight < 150;
+          if (atBottom) scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+        }
+      });
+    };
     if (s.connected) onConnect();
     s.on("connect", onConnect); s.on("presence:users", onUsers); s.on("typing:start", onTypingStart); s.on("typing:stop", onTypingStop);
+    s.on("message:new", onMessageNew);
     const interval = setInterval(() => { setTyping((prev) => { const now = Date.now(); const next: typeof prev = {}; for (const [k, v] of Object.entries(prev)) if (now - v.t < 4000) next[k] = v; return next; }); }, 1000);
-    return () => { clearInterval(interval); s.off("connect", onConnect); s.off("presence:users", onUsers); s.off("typing:start", onTypingStart); s.off("typing:stop", onTypingStop); if (channelId) s.emit("channel:leave", channelId); sockRef.current = null; };
+    return () => { clearInterval(interval); s.off("connect", onConnect); s.off("presence:users", onUsers); s.off("typing:start", onTypingStart); s.off("typing:stop", onTypingStop); s.off("message:new", onMessageNew); if (channelId) s.emit("channel:leave", channelId); sockRef.current = null; };
   }, [user?.id, serverId, channelId]);
+
+  // Scroll detection
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      clearTimeout(scrollTimeout.current);
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+      setShowScrollBtn(!atBottom && messages.length > 0);
+      scrollTimeout.current = setTimeout(() => {}, 100);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [messages.length]);
+
+  function scrollToBottom(smooth = true) {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: smooth ? "smooth" : "instant" });
+    setShowScrollBtn(false);
+  }
 
   function emitTyping() {
     const s = sockRef.current; if (!s) return; const now = Date.now(); if (now - lastTypingSent.current < 2500) return;
@@ -182,8 +262,20 @@ function ChannelView() {
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!user || !text.trim() || sending) return;
-    setSending(true); const content = text.trim(); setText(""); const reply = replyTo?.id ?? null; setReplyTo(null);
-    await supabase.from("messages").insert({ channel_id: channelId, author_id: user.id, content, reply_to: reply });
+    const content = text.trim(); const reply = replyTo?.id ?? null; setText(""); setReplyTo(null);
+    setSending(true);
+    const { data, error } = await supabase.from("messages").insert({
+      channel_id: channelId, author_id: user.id, content, reply_to: reply,
+    }).select().maybeSingle();
+    if (!error && data) {
+      const m = data as Msg;
+      knownIds.current.add(m.id);
+      m.author = profilesCache.current.get(m.author_id) ?? null;
+      setMessages((prev) => [...prev, m]);
+      const s = sockRef.current;
+      if (s) s.emit("message:new", { channelId, message: m });
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }));
+    }
     setSending(false);
   }
 
@@ -218,10 +310,9 @@ function ChannelView() {
   const onlineCount = Array.from(presence.values()).filter((s) => s !== "offline").length;
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-transparent to-card/10">
+    <div className="flex flex-col h-full bg-gradient-to-b from-transparent to-card/10 relative">
       {/* ─── Channel Header ─── */}
       <header className="h-12 border-b border-border/80 px-3 sm:px-5 flex items-center gap-2.5 bg-card/20 backdrop-blur-sm shrink-0">
-        {/* Mobile: channel switcher + back */}
         <div className="flex items-center gap-1 md:hidden">
           <Sheet open={ctx?.mobileChannelsOpen} onOpenChange={ctx?.setMobileChannelsOpen}>
             <SheetTrigger asChild>
@@ -294,15 +385,13 @@ function ChannelView() {
         </div>
       </header>
 
-      {/* ─── Voice / Text ─── */}
       {isVoice ? (
         <div className="flex-1 min-h-0">
           <VoiceRoom room={`panela-${channelId}`} channelId={channelId} />
         </div>
       ) : (
         <>
-          {/* ─── Messages ─── */}
-          <div ref={scrollRef} className="flex-1 overflow-auto px-2 sm:px-5 py-2 space-y-0.5 scroll-smooth">
+          <div ref={scrollRef} className="flex-1 overflow-auto px-2 sm:px-5 py-2 space-y-0.5 scroll-smooth relative">
             {hasMore && <div ref={sentinelRef} className="h-3" />}
             {loadingMore && (
               <div className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground/60">
@@ -324,18 +413,30 @@ function ChannelView() {
 
             {messages.map((m, i) => {
               const prev = messages[i - 1];
+              const showDateSep = !prev || new Date(m.created_at).toDateString() !== new Date(prev.created_at).toDateString();
               const sameAuthor = prev && prev.author_id === m.author_id && !m.reply_to && (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60_000);
               const replied = m.reply_to ? messages.find((x) => x.id === m.reply_to) : null;
               const myRx = reactionsGrouped(reactions, m.id);
               return (
-                <MessageBubble key={m.id}
-                  m={m} sameAuthor={sameAuthor} replied={replied} myRx={myRx}
-                  editing={editing} editText={editText} setEditText={setEditText}
-                  setEditing={setEditing} saveEdit={saveEdit}
-                  react={react} setReplyTo={setReplyTo} removeMsg={removeMsg}
-                  user={user} serverId={serverId} navigate={navigate}
-                  channelId={channelId}
-                />
+                <div key={m.id}>
+                  {showDateSep && (
+                    <div className="flex items-center gap-3 my-4">
+                      <div className="flex-1 h-px bg-border/40" />
+                      <span className="text-[11px] font-semibold text-muted-foreground/50 uppercase tracking-wider shrink-0">
+                        {getDateLabel(m.created_at)}
+                      </span>
+                      <div className="flex-1 h-px bg-border/40" />
+                    </div>
+                  )}
+                  <MessageBubble
+                    m={m} sameAuthor={sameAuthor} replied={replied} myRx={myRx}
+                    editing={editing} editText={editText} setEditText={setEditText}
+                    setEditing={setEditing} saveEdit={saveEdit}
+                    react={react} setReplyTo={setReplyTo} removeMsg={removeMsg}
+                    user={user} serverId={serverId} navigate={navigate}
+                    channelId={channelId} relativeTime={relativeTime} formatTime={formatTime}
+                  />
+                </div>
               );
             })}
 
@@ -351,7 +452,14 @@ function ChannelView() {
             )}
           </div>
 
-          {/* ─── Composer ─── */}
+          {/* Scroll to bottom button */}
+          {showScrollBtn && (
+            <button onClick={() => scrollToBottom()}
+              className="absolute bottom-20 right-6 h-10 w-10 rounded-full bg-primary shadow-lg shadow-primary/30 grid place-items-center hover:bg-primary/90 transition-all animate-in fade-in slide-in-from-bottom-2 z-10">
+              <ArrowDown className="h-5 w-5 text-primary-foreground" />
+            </button>
+          )}
+
           <form onSubmit={send} className="px-2 sm:px-5 pb-2 sm:pb-3 pt-1 border-t border-border/50 bg-card/10 pb-[max(0.5rem,env(safe-area-inset-bottom))] shrink-0">
             {replyTo && (
               <div className="mb-1.5 text-xs flex items-center justify-between px-3 py-1.5 rounded-lg bg-accent/20 border border-border/60">
@@ -390,6 +498,7 @@ function ChannelView() {
                 </PopoverContent>
               </Popover>
               <Input
+                ref={inputRef}
                 value={text}
                 onChange={(e) => { setText(e.target.value); emitTyping(); }}
                 placeholder={`Mensagem em #${channel.name}`}
@@ -409,10 +518,9 @@ function ChannelView() {
   );
 }
 
-/* ─── Message Bubble ─── */
 function MessageBubble({
   m, sameAuthor, replied, myRx, editing, editText, setEditText,
-  setEditing, saveEdit, react, setReplyTo, removeMsg, user, serverId, navigate, channelId,
+  setEditing, saveEdit, react, setReplyTo, removeMsg, user, serverId, navigate, channelId, relativeTime, formatTime,
 }: any) {
   return (
     <div className={`group relative flex gap-2.5 px-2 py-1 rounded-lg hover:bg-accent/15 transition-colors ${sameAuthor ? "pl-[3.25rem]" : ""}`}>
@@ -437,7 +545,9 @@ function MessageBubble({
         {!sameAuthor && (
           <div className="flex items-baseline gap-2 flex-wrap">
             {m.author ? <UsernameBadge profile={m.author as any} /> : <span className="text-sm text-muted-foreground">…</span>}
-            <span className="text-[10px] text-muted-foreground/50">{new Date(m.created_at).toLocaleString("pt-BR", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}</span>
+            <span className="text-[10px] text-muted-foreground/50" title={new Date(m.created_at).toLocaleString("pt-BR")}>
+              {relativeTime(m.created_at)}
+            </span>
           </div>
         )}
 
@@ -489,7 +599,6 @@ function MessageBubble({
         )}
       </div>
 
-      {/* Toolbar */}
       <div className="message-toolbar opacity-0 group-hover:opacity-100 transition-opacity">
         <Popover>
           <PopoverTrigger asChild>
