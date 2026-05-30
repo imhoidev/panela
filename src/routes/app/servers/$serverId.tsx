@@ -274,9 +274,11 @@ function ServerLayout() {
 
         <ServerCtx_.Provider value={ctx}>
           <div className="flex flex-1 min-h-0">
-            <Outlet />
+            <div className="flex-1 min-w-0 min-h-0">
+              <Outlet />
+            </div>
             {memberLevel > 0 && (
-              <div className="hidden md:block sticky top-0 self-start h-full shrink-0">
+              <div className="hidden md:flex shrink-0">
                 <MemberList serverId={serverId} presence={presence} />
               </div>
             )}
