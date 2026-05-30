@@ -1,13 +1,12 @@
 import "@livekit/components-styles";
 import { useEffect, useState, useCallback } from "react";
 import {
-  LiveKitRoom, ParticipantTile, useTracks, useRemoteParticipants, useLocalParticipant,
-  RoomAudioRenderer, ControlBar, TrackRefContext,
+  LiveKitRoom, useRemoteParticipants, useLocalParticipant,
+  RoomAudioRenderer, ControlBar,
 } from "@livekit/components-react";
-import { Track } from "livekit-client";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  Loader2, PhoneOff, Phone, Sparkles, Maximize2, Minimize2, Monitor,
+  Loader2, PhoneOff, Phone, Sparkles, Maximize2, Minimize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -129,40 +128,19 @@ function StageInner({
   focusedId: string | null; fullScreenId: string | null;
   onFocus: (id: string) => void; onFullscreen: (id: string) => void;
 }) {
-  const tracks = useTracks([
-    { source: Track.Source.Camera, withPlaceholder: true },
-    { source: Track.Source.ScreenShare, withPlaceholder: false },
-  ]);
   const remoteParticipants = useRemoteParticipants();
   const { localParticipant } = useLocalParticipant();
   const all = [localParticipant, ...remoteParticipants].filter(Boolean);
 
-  const screenshareTrack = tracks.find((t) => t.source === Track.Source.ScreenShare);
+  const focusTarget = focusedId ? all.find((p) => p.identity === focusedId) : all[0];
 
-  const focusTarget = focusedId
-    ? all.find((p) => p.identity === focusedId)
-    : (screenshareTrack ? all.find((p) => p.identity === screenshareTrack.participant.identity) : null);
+  const gridCols = all.length <= 1 ? "grid-cols-1" : all.length <= 2 ? "grid-cols-2" : all.length <= 4 ? "grid-cols-2" : "grid-cols-3";
 
-  function trackFor(participant: any) {
-    return tracks.find((t) => t.participant.identity === participant.identity);
-  }
-
-  function Tile({ participant, className }: { participant: any; className?: string }) {
-    const tr = trackFor(participant);
-    if (!tr) return null;
+  if (focusTarget && all.length > 1) {
     return (
-      <TrackRefContext.Provider value={tr}>
-        <ParticipantTile className={className} />
-      </TrackRefContext.Provider>
-    );
-  }
-
-  if (focusTarget) {
-    const others = all.filter((p) => p.identity !== focusTarget.identity);
-    return (
-      <div className={`h-full flex flex-col`}>
-        <div className="relative flex-1 min-h-0">
-          <Tile participant={focusTarget} />
+      <div className="h-full flex flex-col">
+        <div className="relative flex-1 min-h-0 mb-2">
+          <ParticipantCard participant={focusTarget} large />
           <div className="absolute top-2 right-2 flex gap-1.5 z-10">
             <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70"
               onClick={() => onFullscreen(focusTarget.identity)}>
@@ -170,65 +148,64 @@ function StageInner({
             </Button>
           </div>
         </div>
-        {others.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto p-2 shrink-0">
-            {others.map((p) => (
-              <div key={p.identity} onClick={() => onFocus(p.identity)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onFocus(p.identity); }}
-                className="relative w-36 h-24 rounded-lg overflow-hidden shrink-0 ring-1 ring-border hover:ring-primary transition-all cursor-pointer">
-                <Tile participant={p} />
-                {p.isScreenShareEnabled && (
-                  <span className="absolute top-1 left-1 bg-primary/80 text-primary-foreground text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 pointer-events-none">
-                    <Monitor className="h-3 w-3" /> Tela
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="flex gap-2 overflow-x-auto p-2 shrink-0">
+          {all.filter((p) => p.identity !== focusTarget.identity).map((p) => (
+            <div key={p.identity} onClick={() => onFocus(p.identity)}
+              role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onFocus(p.identity); }}
+              className="shrink-0 cursor-pointer">
+              <ParticipantCard participant={p} compact />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
-
-  if (all.length <= 2) {
-    return (
-      <div className="h-full flex flex-col gap-2 sm:grid sm:grid-cols-2 sm:grid-rows-1">
-        {all.map((p) => (
-          <ParticipantTileBtn key={p.identity} participant={p} onClick={onFocus} tracks={tracks} />
-        ))}
-      </div>
-    );
-  }
-
-  const cols = all.length <= 4 ? "repeat(auto-fill, minmax(140px, 1fr))" : "repeat(auto-fill, minmax(160px, 1fr))";
-  const rows = all.length <= 4 ? "minmax(120px, auto)" : "minmax(140px, auto)";
 
   return (
-    <div className="h-full grid gap-2 sm:gap-3"
-      style={{
-        gridTemplateColumns: cols,
-        gridAutoRows: rows,
-      }}>
+    <div className={`h-full grid ${gridCols} gap-3 place-items-center`}>
       {all.map((p) => (
-        <ParticipantTileBtn key={p.identity} participant={p} onClick={onFocus} tracks={tracks} />
+        <ParticipantCard key={p.identity} participant={p} />
       ))}
     </div>
   );
 }
 
-function ParticipantTileBtn({ participant, onClick, tracks }: { participant: any; onClick: (id: string) => void; tracks: any[] }) {
-  const tr = tracks.find((t) => t.participant.identity === participant.identity);
-  if (!tr) return null;
+function ParticipantCard({ participant, large, compact }: { participant: any; large?: boolean; compact?: boolean }) {
+  const name = participant.identity?.replace(/[_-]/g, " ") || "Alguém";
+  const isSpeaking = participant.isSpeaking;
+  const isMuted = participant.isMicrophoneEnabled === false;
+  const initial = name[0]?.toUpperCase() || "?";
+
+  if (compact) {
+    return (
+      <div className={`flex items-center gap-2 rounded-lg px-3 py-2 border transition-all ${
+        isSpeaking ? "border-primary/60 bg-primary/5" : "border-border bg-card/50"
+      }`}>
+        <div className={`h-8 w-8 rounded-full grid place-items-center text-sm font-bold shrink-0 transition-all ${
+          isSpeaking ? "bg-primary text-primary-foreground ring-2 ring-primary/50" : "bg-accent text-muted-foreground"
+        }`}>
+          {initial}
+        </div>
+        <span className="text-xs font-medium truncate max-w-[80px]">{name}</span>
+        {isMuted && <span className="text-[10px] text-muted-foreground/50">🔇</span>}
+      </div>
+    );
+  }
+
   return (
-    <div onClick={() => onClick(participant.identity)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onClick(participant.identity); }}
-      className="relative rounded-xl overflow-hidden ring-1 ring-border hover:ring-primary/60 transition-all cursor-pointer group">
-      <TrackRefContext.Provider value={tr}>
-        <ParticipantTile />
-      </TrackRefContext.Provider>
-      {participant.isScreenShareEnabled && (
-        <span className="absolute top-1.5 left-1.5 bg-primary/80 text-primary-foreground text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 pointer-events-none z-10">
-          <Monitor className="h-3 w-3" /> Tela
-        </span>
-      )}
+    <div className={`rounded-2xl border transition-all flex flex-col items-center justify-center gap-2 ${
+      isSpeaking ? "border-primary/50 bg-primary/5 shadow-md shadow-primary/10" : "border-border bg-card/50"
+    } ${large ? "w-full h-full min-h-[180px] p-6" : "w-full min-h-[100px] p-4"}`}>
+      <div className={`rounded-full grid place-items-center font-bold transition-all ${
+        isSpeaking ? "bg-primary text-primary-foreground ring-3 ring-primary/40 scale-105" : "bg-accent text-muted-foreground"
+      } ${large ? "h-16 w-16 text-xl" : "h-12 w-12 text-base"}`}>
+        {initial}
+      </div>
+      <span className={`font-medium truncate max-w-full text-center ${large ? "text-base" : "text-sm"}`}>{name}</span>
+      <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+        <span>{isMuted ? "🔇 Mutado" : "🎤 Falando"}</span>
+        {isSpeaking && <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />}
+      </div>
     </div>
   );
 }
