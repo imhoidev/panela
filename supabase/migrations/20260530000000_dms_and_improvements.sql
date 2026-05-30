@@ -70,13 +70,13 @@ ALTER TABLE public.dm_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.friends ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profile_stats ENABLE ROW LEVEL SECURITY;
 
--- dm_conversations (references dm_participants which now exists)
-CREATE POLICY "dm_conv_select_participant" ON public.dm_conversations FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.dm_participants WHERE conversation_id = id AND user_id = auth.uid()));
+-- dm_conversations
+CREATE POLICY "dm_conv_select" ON public.dm_conversations FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.dm_participants WHERE conversation_id = dm_conversations.id AND user_id = auth.uid()));
 CREATE POLICY "dm_conv_insert" ON public.dm_conversations FOR INSERT TO authenticated
   WITH CHECK (true);
-CREATE POLICY "dm_conv_update_participant" ON public.dm_conversations FOR UPDATE TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.dm_participants WHERE conversation_id = id AND user_id = auth.uid()));
+CREATE POLICY "dm_conv_update" ON public.dm_conversations FOR UPDATE TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.dm_participants WHERE conversation_id = dm_conversations.id AND user_id = auth.uid()));
 
 -- dm_participants
 CREATE POLICY "dm_part_select_self" ON public.dm_participants FOR SELECT TO authenticated
@@ -86,7 +86,7 @@ CREATE POLICY "dm_part_insert" ON public.dm_participants FOR INSERT TO authentic
 CREATE POLICY "dm_part_update_self" ON public.dm_participants FOR UPDATE TO authenticated
   USING (user_id = auth.uid());
 
--- dm_messages (references dm_participants)
+-- dm_messages
 CREATE POLICY "dm_msg_select_participant" ON public.dm_messages FOR SELECT TO authenticated
   USING (EXISTS (SELECT 1 FROM public.dm_participants WHERE conversation_id = dm_messages.conversation_id AND user_id = auth.uid()));
 CREATE POLICY "dm_msg_insert_self" ON public.dm_messages FOR INSERT TO authenticated
