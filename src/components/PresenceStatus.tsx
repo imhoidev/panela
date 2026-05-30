@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Circle, Check } from "lucide-react";
+import { CircleIcon, Check } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
   online: "Online",
@@ -65,7 +65,7 @@ export function StatusPicker({ currentStatus, onSet }: { currentStatus?: string;
       <DropdownMenuContent align="start" className="w-44">
         {["online", "idle", "dnd", "invisible"].map((s) => (
           <DropdownMenuItem key={s} onClick={() => setStatus(s)} className="flex items-center gap-2">
-            <Circle className={`h-3.5 w-3.5 fill-current ${STATUS_COLORS[s]}`} />
+            <CircleIcon className={`h-3.5 w-3.5 fill-current ${STATUS_COLORS[s]}`} />
             <span className="flex-1">{STATUS_LABELS[s]}</span>
             {(currentStatus || "online") === s && <Check className="h-3.5 w-3.5" />}
           </DropdownMenuItem>

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Users, Crown, Shield, Wrench, Search, Circle, Hash } from "lucide-react";
+import { Users, Crown, Shield, Wrench, Search, CircleIcon, Hash } from "lucide-react";
 
 type MemberWithProfile = {
   user_id: string;
@@ -89,7 +89,7 @@ export function MemberList({
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-semibold leading-tight truncate">Membros</p>
           <p className="text-[10px] text-muted-foreground/60 leading-tight flex items-center gap-1">
-            <Circle className={`h-1.5 w-1.5 ${onlineCount > 0 ? "fill-emerald-500" : "fill-muted-foreground/30"}`} />
+            <CircleIcon className={`h-1.5 w-1.5 ${onlineCount > 0 ? "fill-emerald-500" : "fill-muted-foreground/30"}`} />
             {onlineCount} online · {filtered.length} total
           </p>
         </div>

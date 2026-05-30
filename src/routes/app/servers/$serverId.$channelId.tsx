@@ -21,7 +21,7 @@ import { useServerContext } from "./$serverId";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Hash, SendHorizontal, Smile, CornerUpLeft, X, Trash2, Pencil, Check, Volume2, ArrowLeft,
-  Paperclip, MessageSquare, Users, Circle, AtSign, Menu,
+  Paperclip, MessageSquare, Users, CircleIcon, AtSign, Menu,
 } from "lucide-react";
 
 const EMOJIS = ["👍", "❤️", "🔥", "😂", "🥹", "🤝", "👀", "🎉", "💯", "🍳"];
@@ -279,7 +279,7 @@ function ChannelView() {
             <SheetTrigger asChild>
               <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-muted-foreground/70 hover:text-foreground text-xs md:hidden">
                 <Users className="h-3.5 w-3.5" />
-                <Circle className={`h-2 w-2 ${onlineCount > 0 ? "fill-emerald-500" : "fill-muted-foreground/30"}`} />
+                <CircleIcon className={`h-2 w-2 ${onlineCount > 0 ? "fill-emerald-500" : "fill-muted-foreground/30"}`} />
                 {onlineCount}
               </Button>
             </SheetTrigger>
@@ -288,7 +288,7 @@ function ChannelView() {
             </SheetContent>
           </Sheet>
           <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground/70">
-            <Circle className={`h-2 w-2 ${onlineCount > 0 ? "fill-emerald-500" : "fill-muted-foreground/30"}`} />
+            <CircleIcon className={`h-2 w-2 ${onlineCount > 0 ? "fill-emerald-500" : "fill-muted-foreground/30"}`} />
             <span className="font-medium">{onlineCount}</span> online
           </div>
         </div>
