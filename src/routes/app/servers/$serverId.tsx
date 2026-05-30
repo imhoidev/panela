@@ -108,11 +108,18 @@ function ServerLayout() {
   }
 
   async function loadMembers() {
-    const { data } = await supabase
+    const { data: mems } = await supabase
       .from("server_members")
-      .select("user_id, level, xp, profiles!inner(username,display_name,avatar_url)")
+      .select("user_id, level, xp")
       .eq("server_id", serverId);
-    setMembers(data ?? []);
+    if (!mems?.length) { setMembers([]); return; }
+    const userIds = mems.map((m) => m.user_id);
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, username, display_name, avatar_url")
+      .in("id", userIds);
+    const profMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p]));
+    setMembers(mems.map((m) => ({ ...m, profiles: profMap[m.user_id] || null })));
   }
 
   useEffect(() => { load(); }, [serverId, user?.id]);

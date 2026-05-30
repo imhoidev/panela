@@ -1,5 +1,5 @@
 import "@livekit/components-styles";
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   LiveKitRoom, useRemoteParticipants, useLocalParticipant,
   RoomAudioRenderer, ControlBar, useTracks, VideoTrack,
@@ -52,9 +52,6 @@ export function VoiceRoom({
     if (defaultJoined && !token && !loading) join();
   }, [defaultJoined]);
 
-  const handleEscape = useCallback(() => { setFocusedId(null); }, []);
-  useEffect(() => { document.addEventListener("keydown", handleEscape); return () => document.removeEventListener("keydown", handleEscape); }, [handleEscape]);
-
   if (!joined || !token) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center gap-5">
@@ -89,15 +86,17 @@ export function VoiceRoom({
     >
       <div className="flex flex-col h-full bg-gradient-to-b from-background to-card/40">
         <div className="flex-1 min-h-0 overflow-auto p-3 sm:p-4">
-          <StageInner
-            focusedId={focusedId}
-            onFocus={setFocusedId}
-          />
+          <StageInner focusedId={focusedId} onFocus={setFocusedId} />
         </div>
         <div className="border-t border-border bg-card/70 backdrop-blur supports-[backdrop-filter]:bg-card/60 px-3 sm:px-5 py-3 sm:py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto max-w-3xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div className="flex-1 min-w-0 flex items-center justify-center sm:justify-start">
-              <VoiceControls />
+              <div className="flex items-center gap-2 sm:gap-3 rounded-full bg-background/60 border border-border px-2 sm:px-3 py-1.5">
+                <ControlBar
+                  variation="minimal"
+                  controls={{ microphone: true, camera: true, screenShare: true, chat: false, leave: false }}
+                />
+              </div>
             </div>
             <Button
               variant="destructive"
@@ -112,17 +111,6 @@ export function VoiceRoom({
       </div>
       <RoomAudioRenderer />
     </LiveKitRoom>
-  );
-}
-
-function VoiceControls() {
-  return (
-    <div className="flex items-center gap-2 sm:gap-3 rounded-full bg-background/60 border border-border px-2 sm:px-3 py-1.5">
-      <ControlBar
-        variation="minimal"
-        controls={{ microphone: true, camera: true, screenShare: true, chat: false, leave: false }}
-      />
-    </div>
   );
 }
 
@@ -141,7 +129,15 @@ function StageInner({
     return [localParticipant, ...remoteParticipants].filter(Boolean);
   }, [localParticipant, remoteParticipants]);
 
-  const getTrack = useCallback((identity: string) => {
+  const hasCamera = useCallback((p: any) => {
+    return p.isCameraEnabled && cameraTracks.some(t => t.participant.identity === p.identity);
+  }, [cameraTracks]);
+
+  const hasScreen = useCallback((p: any) => {
+    return p.isScreenShareEnabled && screenTracks.some(t => t.participant.identity === p.identity);
+  }, [screenTracks]);
+
+  const getCamTrack = useCallback((identity: string) => {
     return cameraTracks.find(t => t.participant.identity === identity);
   }, [cameraTracks]);
 
@@ -149,8 +145,11 @@ function StageInner({
     return screenTracks.find(t => t.participant.identity === identity);
   }, [screenTracks]);
 
-  const hasVideo = useCallback((identity: string) => !!getTrack(identity), [getTrack]);
-  const hasScreen = useCallback((identity: string) => !!getScreenTrack(identity), [getScreenTrack]);
+  const activeTrack = useCallback((p: any) => {
+    if (hasScreen(p)) return { track: getScreenTrack(p.identity), type: "screen" as const };
+    if (hasCamera(p)) return { track: getCamTrack(p.identity), type: "camera" as const };
+    return null;
+  }, [hasScreen, hasCamera, getScreenTrack, getCamTrack]);
 
   if (participants.length === 0) {
     return (
@@ -167,26 +166,15 @@ function StageInner({
     return (
       <div className="h-full flex flex-col gap-3">
         <div className="relative flex-1 min-h-0 rounded-2xl overflow-hidden bg-black/40">
-          {hasVideo(focusTarget.identity) ? (
-            <VideoTrack
-              trackRef={getTrack(focusTarget.identity)!}
-              className="h-full w-full object-contain"
-            />
-          ) : hasScreen(focusTarget.identity) ? (
-            <VideoTrack
-              trackRef={getScreenTrack(focusTarget.identity)!}
-              className="h-full w-full object-contain"
-            />
-          ) : (
-            <ParticipantFace participant={focusTarget} large />
-          )}
-          <div className="absolute bottom-3 left-3 flex items-center gap-2 z-10">
-            <ParticipantBadge participant={focusTarget} />
+          <ParticipantVideo participant={focusTarget} activeTrack={activeTrack(focusTarget)} large />
+          <div className="absolute bottom-3 left-3 z-10">
+            <ParticipantInfo participant={focusTarget} />
           </div>
-          <div className="absolute top-3 right-3 z-10">
+          <div className="absolute top-3 right-3 z-10 flex gap-1">
+            <FullscreenButton targetClass="voice-stage-focus" />
             <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur"
-              onClick={() => onFocus(focusedId ? null : focusTarget.identity)}>
-              <Maximize2 className="h-4 w-4" />
+              onClick={() => onFocus(focusTarget.identity === focusedId ? null : focusTarget.identity)}>
+              <Minimize2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -194,15 +182,7 @@ function StageInner({
           {participants.filter(p => p.identity !== focusTarget.identity).map(p => (
             <button key={p.identity} onClick={() => onFocus(p.identity)}
               className="shrink-0 relative w-28 h-20 rounded-xl overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all bg-black/40">
-              {hasVideo(p.identity) ? (
-                <VideoTrack trackRef={getTrack(p.identity)!} className="h-full w-full object-cover" />
-              ) : (
-                <div className="h-full w-full grid place-items-center">
-                  <div className="h-8 w-8 rounded-full bg-accent/80 grid place-items-center text-xs font-bold text-foreground">
-                    {initialName(p)}
-                  </div>
-                </div>
-              )}
+              <ParticipantVideo participant={p} activeTrack={activeTrack(p)} compact />
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 py-1">
                 <p className="text-[10px] text-white/90 truncate flex items-center gap-1">
                   {p.isMicrophoneEnabled === false && <MicOff className="h-2.5 w-2.5 text-red-400" />}
@@ -217,80 +197,121 @@ function StageInner({
   }
 
   return (
-    <div className={`grid ${gridCols} gap-3 auto-rows-fr`} style={{ minHeight: participants.length === 1 ? "100%" : undefined }}>
-      {participants.map(p => {
-        const videoTrack = getTrack(p.identity);
-        const screenTrack = getScreenTrack(p.identity);
-        const showVideo = videoTrack || screenTrack;
-        return (
-          <div key={p.identity}
-            className={`relative rounded-2xl overflow-hidden bg-black/40 border-2 transition-all min-h-[120px] ${
-              p.isSpeaking ? "border-emerald-500/60 shadow-lg shadow-emerald-500/10" : "border-transparent"
-            }`}>
-            {showVideo ? (
-              <VideoTrack
-                trackRef={videoTrack || screenTrack!}
-                className="h-full w-full object-contain"
-              />
-            ) : (
-              <ParticipantFace participant={p} />
-            )}
-            <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-              <ParticipantBadge participant={p} />
+    <div className={`grid ${gridCols} gap-3 auto-rows-fr voice-stage-focus`} style={{ minHeight: participants.length === 1 ? "100%" : undefined }}>
+      {participants.map(p => (
+        <div key={p.identity}
+          className={`relative rounded-2xl overflow-hidden bg-black/40 border-2 transition-all min-h-[120px] ${
+            p.isSpeaking ? "border-emerald-500/60 shadow-lg shadow-emerald-500/10" : "border-transparent"
+          }`}>
+          <ParticipantVideo participant={p} activeTrack={activeTrack(p)} />
+          <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+            <ParticipantInfo participant={p} />
+            {participants.length > 1 && (
               <Button size="icon" variant="ghost"
                 className="h-7 w-7 rounded-full bg-black/40 hover:bg-black/60 text-white/70"
-                onClick={() => onFocus(p.identity)}>
+                onClick={() => onFocus(p.identity)} title="Focar">
                 <Maximize2 className="h-3 w-3" />
               </Button>
-            </div>
+            )}
           </div>
-        );
-      })}
+        </div>
+      ))}
     </div>
   );
 }
 
-function ParticipantFace({ participant, large }: { participant: any; large?: boolean }) {
+function ParticipantVideo({ participant, activeTrack, large, compact }: {
+  participant: any; activeTrack: { track: any; type: string } | null; large?: boolean; compact?: boolean;
+}) {
+  if (activeTrack) {
+    return (
+      <VideoTrack
+        trackRef={activeTrack.track}
+        className={`h-full w-full ${activeTrack.type === "screen" ? "object-contain" : "object-cover"}`}
+      />
+    );
+  }
+  return <ParticipantFace participant={participant} large={large} compact={compact} />;
+}
+
+function ParticipantFace({ participant, large, compact }: { participant: any; large?: boolean; compact?: boolean }) {
   const name = participant.name || participant.identity || "Alguém";
+  let avatarUrl = "";
+  try { const m = participant.metadata ? JSON.parse(participant.metadata) : {}; avatarUrl = m.avatar_url || ""; } catch {}
+
+  if (compact) {
+    return (
+      <div className="h-full w-full grid place-items-center">
+        <Avatar className="h-8 w-8">
+          <AvatarImage src={avatarUrl || undefined} />
+          <AvatarFallback className="text-[10px]">{name[0]?.toUpperCase() || "?"}</AvatarFallback>
+        </Avatar>
+      </div>
+    );
+  }
+
   return (
-    <div className={`h-full w-full flex flex-col items-center justify-center gap-3 ${
-      large ? "p-8" : "p-4"
-    }`}>
-      <div className={`rounded-full grid place-items-center font-bold text-foreground transition-all ${
-        participant.isSpeaking
-          ? "bg-emerald-500/20 ring-3 ring-emerald-500/50 scale-105"
-          : "bg-accent/60"
-      } ${large ? "h-20 w-20 text-2xl" : "h-14 w-14 text-lg"}`}>
-        {initialName(participant)}
+    <div className={`h-full w-full flex flex-col items-center justify-center gap-3 ${large ? "p-8" : "p-4"}`}>
+      <div className={`relative ${large ? "h-20 w-20" : "h-14 w-14"}`}>
+        <Avatar className={`h-full w-full ring-2 transition-all ${participant.isSpeaking ? "ring-emerald-500/50 ring-offset-2 ring-offset-black/40" : "ring-border/30"}`}>
+          <AvatarImage src={avatarUrl || undefined} />
+          <AvatarFallback className={`${large ? "text-2xl" : "text-lg"} font-bold`}>
+            {name[0]?.toUpperCase() || "?"}
+          </AvatarFallback>
+        </Avatar>
+        {participant.isSpeaking && (
+          <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 border-2 border-black/40" />
+        )}
       </div>
       <span className={`font-medium text-foreground/80 truncate max-w-full text-center ${large ? "text-lg" : "text-sm"}`}>
         {name}
       </span>
       {participant.isSpeaking && (
         <span className="flex items-center gap-1.5 text-xs text-emerald-500">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          Falando
+          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />Falando
         </span>
       )}
     </div>
   );
 }
 
-function ParticipantBadge({ participant }: { participant: any }) {
+function ParticipantInfo({ participant }: { participant: any }) {
   const micOn = participant.isMicrophoneEnabled !== false;
   const camOn = participant.isCameraEnabled;
   const screenOn = participant.isScreenShareEnabled;
+  let avatarUrl = "";
+  try { const m = participant.metadata ? JSON.parse(participant.metadata) : {}; avatarUrl = m.avatar_url || ""; } catch {}
   return (
     <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur rounded-full px-2.5 py-1 text-[10px] text-white/80">
+      <Avatar className="h-5 w-5">
+        <AvatarImage src={avatarUrl || undefined} />
+        <AvatarFallback className="text-[8px]">{(participant.name || participant.identity || "?")[0]?.toUpperCase()}</AvatarFallback>
+      </Avatar>
+      {screenOn ? <Monitor className="h-3 w-3 text-blue-400" /> : camOn ? <Camera className="h-3 w-3" /> : null}
       {micOn ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3 text-red-400" />}
-      {camOn && <Camera className="h-3 w-3" />}
-      {screenOn && <Monitor className="h-3 w-3" />}
-      <span className="truncate max-w-[100px]">{participant.name || participant.identity.slice(0, 8)}</span>
+      <span className="truncate max-w-[80px]">{participant.name || participant.identity.slice(0, 8)}</span>
     </div>
   );
 }
 
-function initialName(p: any) {
-  const n = p.name || p.identity || "?";
-  return n[0]?.toUpperCase() || "?";
+function FullscreenButton({ targetClass }: { targetClass: string }) {
+  const [isFull, setIsFull] = useState(false);
+
+  useEffect(() => {
+    const onchange = () => setIsFull(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onchange);
+    return () => document.removeEventListener("fullscreenchange", onchange);
+  }, []);
+
+  async function toggle() {
+    if (isFull) { await document.exitFullscreen(); return; }
+    const el = document.querySelector(`.${targetClass}`) as HTMLElement;
+    if (el) await el.requestFullscreen();
+  }
+
+  return (
+    <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur" onClick={toggle}>
+      {isFull ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+    </Button>
+  );
 }
