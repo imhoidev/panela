@@ -193,7 +193,7 @@ async function handleRequest(req, res) {
       const { error: upErr } = await sb.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: false });
       if (upErr) { send(res, json({ error: upErr.message }, 500)); return; }
       const { data: pub } = sb.storage.from(bucket).getPublicUrl(path);
-      const { data: msg, error: msgErr } = await sb.from("dm_messages").insert({
+      const { data: msg, error: msgErr } = await sbAdmin.from("dm_messages").insert({
         conversation_id: conversationId, author_id: u.id, content: null,
         attachment_url: pub.publicUrl, attachment_type: filePart.contentType,
       }).select("id").single();
@@ -223,7 +223,7 @@ async function handleRequest(req, res) {
       const { error: upErr } = await sb.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: false });
       if (upErr) { send(res, json({ error: upErr.message }, 500)); return; }
       const { data: pub } = sb.storage.from(bucket).getPublicUrl(path);
-      const { data: msg, error: msgErr } = await sb.from("messages").insert({ channel_id: channelId, author_id: u.id, content: null, attachment_url: pub.publicUrl, attachment_type: filePart.contentType }).select("id").single();
+      const { data: msg, error: msgErr } = await sbAdmin.from("messages").insert({ channel_id: channelId, author_id: u.id, content: null, attachment_url: pub.publicUrl, attachment_type: filePart.contentType }).select("id").single();
       if (msgErr) { send(res, json({ error: msgErr.message }, 500)); return; }
 
       send(res, json({ id: msg.id, url: pub.publicUrl }));

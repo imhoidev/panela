@@ -324,6 +324,8 @@ function ChannelView() {
   function insertSticker(url: string) { setText((prev) => prev + ` ![sticker](${url}) `); }
 
   const ctx = useServerContext();
+  const channelCount = (ctx?.uncategorized?.length ?? 0) +
+    [...(ctx?.categories?.entries() || [])].reduce((s, [, chs]) => s + chs.length, 0);
   if (!channel) return <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-8">Carregando canal…</div>;
 
   const isVoice = channel.type === "voice";
@@ -352,7 +354,7 @@ function ChannelView() {
                 )}
                 <div className="min-w-0 flex-1">
                   <h2 className="font-semibold truncate text-sm">{ctx?.server?.name || "Servidor"}</h2>
-                  <p className="text-[10px] text-muted-foreground/60">{ctx?.channels?.length || 0} canais</p>
+                  <p className="text-[10px] text-muted-foreground/60">{channelCount} canais</p>
                 </div>
               </div>
               <ScrollArea className="flex-1">
