@@ -25,24 +25,41 @@ function DMLayout() {
   async function loadDMs(showLoader = true) {
     if (!user) return;
     if (showLoader) setLoading(true);
-    const { data } = await supabase
+
+    const { data: myParts } = await supabase
+      .from("dm_participants")
+      .select("conversation_id, last_read_at")
+      .eq("user_id", user.id);
+    const convIds = (myParts ?? []).map((p: any) => p.conversation_id);
+    if (!convIds.length) { setConversations([]); setMyParts(new Map()); setProfiles(new Map()); if (showLoader) setLoading(false); return; }
+
+    const lastReadMap = new Map<string, string>();
+    (myParts ?? []).forEach((p: any) => { if (p.last_read_at) lastReadMap.set(p.conversation_id, p.last_read_at); });
+    setMyParts(lastReadMap);
+
+    const { data: convs } = await supabase
       .from("dm_conversations")
-      .select("*, dm_participants!inner(*)")
+      .select("*")
+      .in("id", convIds)
       .order("last_message_at", { ascending: false, nullsFirst: false });
-    const convs = (data ?? []).map((c: any) => ({
-      ...c,
-      other: c.dm_participants?.find((p: any) => p.user_id !== user.id),
-      myPart: c.dm_participants?.find((p: any) => p.user_id === user.id),
-    }));
-    setConversations(convs);
 
-    const parts = new Map<string, string>();
-    convs.forEach((c: any) => { if (c.myPart?.last_read_at) parts.set(c.id, c.myPart.last_read_at); });
-    setMyParts(parts);
+    // Use SECURITY DEFINER function to get all participants (bypasses RLS)
+    const { data: allParts } = await supabase.rpc("get_dm_participants", { conv_ids: convIds });
+    const partsByConv = new Map<string, any[]>();
+    (allParts ?? []).forEach((p: any) => {
+      const arr = partsByConv.get(p.conversation_id) ?? [];
+      arr.push(p); partsByConv.set(p.conversation_id, arr);
+    });
 
-    const ids = [...new Set(convs.map((c: any) => c.other?.user_id).filter(Boolean))];
-    if (ids.length) {
-      const { data: profs } = await supabase.from("profiles").select("id,username,display_name,avatar_url").in("id", ids);
+    const mapped = (convs ?? []).map((c: any) => {
+      const participants = partsByConv.get(c.id) ?? [];
+      return { ...c, other: participants.find((p: any) => p.user_id !== user.id) ?? null };
+    });
+    setConversations(mapped);
+
+    const otherIds = [...new Set(mapped.map((c: any) => c.other?.user_id).filter(Boolean))];
+    if (otherIds.length) {
+      const { data: profs } = await supabase.from("profiles").select("id,username,display_name,avatar_url").in("id", otherIds);
       const m = new Map(profs?.map((p: any) => [p.id, p]) ?? []);
       setProfiles(m);
     }
@@ -51,25 +68,18 @@ function DMLayout() {
 
   useEffect(() => { loadDMs(); }, [user?.id]);
 
-  // Refresh when navigating to DM root (catches convos created externally)
   useEffect(() => {
     if (loc.pathname === "/app/dms") loadDMs(false);
   }, [loc.pathname]);
 
   async function fetchNewConversation(convId: string) {
     if (!user) return;
-    const { data: conv } = await supabase
-      .from("dm_conversations")
-      .select("*, dm_participants!inner(*)")
-      .eq("id", convId)
-      .single();
+    const { data: conv } = await supabase.from("dm_conversations").select("*").eq("id", convId).single();
     if (!conv) return;
-    const newConv = {
-      ...conv,
-      other: conv.dm_participants?.find((p: any) => p.user_id !== user.id),
-      myPart: conv.dm_participants?.find((p: any) => p.user_id === user.id),
-    };
-    const otherId = newConv.other?.user_id;
+    const { data: parts } = await supabase.rpc("get_dm_participants_single", { conv_id: convId });
+    const other = (parts ?? []).find((p: any) => p.user_id !== user.id);
+    const otherId = other?.user_id;
+    const newConv = { ...conv, other: other ?? null };
     if (otherId) {
       const { data: prof } = await supabase.from("profiles")
         .select("id,username,display_name,avatar_url").eq("id", otherId).maybeSingle();
@@ -79,7 +89,6 @@ function DMLayout() {
       if (prev.some((c) => c.id === convId)) return prev;
       return [...prev, newConv].sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
     });
-    if (newConv.myPart?.last_read_at) setMyParts((prev) => new Map(prev).set(convId, newConv.myPart.last_read_at));
   }
 
   // Targeted realtime + fetch new conversations

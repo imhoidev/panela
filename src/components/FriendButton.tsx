@@ -28,21 +28,11 @@ export function FriendButton({ targetUserId }: { targetUserId: string }) {
 
   async function startDM() {
     if (!user) return;
-    const { data: existing } = await supabase
-      .from("dm_participants")
-      .select("conversation_id")
-      .eq("user_id", user.id);
-    const convIds = [...new Set((existing ?? []).map((p: any) => p.conversation_id))];
-    if (convIds.length) {
-      const { data: shared } = await supabase
-        .from("dm_participants")
-        .select("conversation_id")
-        .in("conversation_id", convIds)
-        .eq("user_id", targetUserId);
-      if (shared?.length) {
-        navigate({ to: "/app/dms/$conversationId", params: { conversationId: shared[0].conversation_id } });
-        return;
-      }
+    // Use SECURITY DEFINER function to find existing shared conversation
+    const { data: shared } = await supabase.rpc("get_shared_dm_conversation", { other_user_id: targetUserId });
+    if (shared?.length) {
+      navigate({ to: "/app/dms/$conversationId", params: { conversationId: shared[0].conversation_id } });
+      return;
     }
     // Pre-generate UUID so we don't need to SELECT after INSERT (avoids RLS chicken-and-egg)
     const convId = crypto.randomUUID();

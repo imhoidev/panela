@@ -42,10 +42,7 @@ function DMChat() {
     setLoading(true);
     const authors: string[] = [];
 
-    const { data: parts } = await supabase
-      .from("dm_participants")
-      .select("user_id")
-      .eq("conversation_id", conversationId);
+    const { data: parts } = await supabase.rpc("get_dm_participants_single", { conv_id: conversationId });
     const pIds = (parts ?? []).map((p: any) => p.user_id);
     authors.push(...pIds);
     const otherId = pIds.find((id) => id !== user?.id);
