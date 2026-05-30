@@ -1,5 +1,5 @@
 import "@livekit/components-styles";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, type ReactNode } from "react";
 import {
   LiveKitRoom, useRemoteParticipants, useLocalParticipant,
   RoomAudioRenderer, ControlBar, useTracks, ParticipantTile,
@@ -7,7 +7,7 @@ import {
 } from "@livekit/components-react";
 import { Track } from "livekit-client";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, PhoneOff, Phone, Sparkles, Mic, MicOff, Camera, Monitor } from "lucide-react";
+import { Loader2, PhoneOff, Phone, Sparkles, Mic, MicOff, Camera, Monitor, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
@@ -111,7 +111,7 @@ function StageGrid() {
   }
 
   return (
-    <div className={`grid ${cols} gap-3 auto-rows-fr`} style={{ minHeight: count === 1 ? "100%" : undefined }}>
+    <div className={`grid ${cols} gap-3 auto-rows-fr ${count === 1 ? "h-full" : ""}`}>
       {participants.map((p) => {
         const camTrack = cameraTracks.find(t => t.participant.identity === p.identity);
         const screenTrack = screenTracks.find(t => t.participant.identity === p.identity);
@@ -121,21 +121,48 @@ function StageGrid() {
         const trackRef = screenTrack || camTrack;
 
         return (
-          <div key={p.identity}
-            className={`relative rounded-2xl overflow-hidden bg-black/40 border-2 transition-all min-h-[120px] ${
-              p.isSpeaking ? "border-emerald-500/60 shadow-md" : "border-transparent"
-            }`}>
+          <CardWrapper key={p.identity} participant={p} isScreen={hasScreen}>
             {showVideo && trackRef ? (
               <TrackRefContext.Provider value={trackRef}>
-                <ParticipantTile className="h-full w-full" />
+                <ParticipantTile className={`h-full w-full ${hasScreen ? "[&_video]:object-contain" : "[&_video]:object-cover"}`} />
               </TrackRefContext.Provider>
             ) : (
               <ParticipantCard participant={p} />
             )}
             <ParticipantInfo participant={p} />
-          </div>
+          </CardWrapper>
         );
       })}
+    </div>
+  );
+}
+
+function CardWrapper({ participant, isScreen, children }: { participant: any; isScreen: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isFull, setIsFull] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setIsFull(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  async function toggleFull() {
+    if (isFull) { await document.exitFullscreen(); return; }
+    if (ref.current) await ref.current.requestFullscreen();
+  }
+
+  return (
+    <div ref={ref}
+      className={`group relative rounded-2xl overflow-hidden bg-black/40 border-2 transition-all min-h-[120px] ${
+        participant.isSpeaking ? "border-emerald-500/60 shadow-md" : "border-transparent"
+      } ${isScreen ? "[&_video]:object-contain" : "[&_video]:object-cover"}`}>
+      {children}
+      <button onClick={toggleFull}
+        className="absolute top-2 right-2 z-10 h-7 w-7 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur grid place-items-center text-white/70 hover:text-white transition-all opacity-0 group-hover:opacity-100"
+        title={isFull ? "Sair da tela cheia" : "Tela cheia"}>
+        <Maximize2 className="h-3 w-3" />
+      </button>
     </div>
   );
 }

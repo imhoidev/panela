@@ -276,7 +276,7 @@ function ServerLayout() {
           <div className="flex flex-1 min-h-0">
             <Outlet />
             {memberLevel > 0 && (
-              <div className="hidden lg:block">
+              <div className="hidden md:block sticky top-0 self-start h-full shrink-0">
                 <MemberList serverId={serverId} presence={presence} />
               </div>
             )}

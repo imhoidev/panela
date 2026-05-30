@@ -81,7 +81,7 @@ export function MemberList({
   const onlineCount = filtered.filter((m) => (presence.get(m.user_id) || "offline") !== "offline").length;
 
   return (
-    <div className="w-56 md:w-60 border-l border-border bg-card/30 flex-col flex min-h-0">
+    <div className="w-56 md:w-60 border-l border-border bg-card/30 flex-col flex h-full">
       <div className="h-[3.25rem] border-b border-border flex items-center px-4 gap-2.5 shrink-0">
         <div className="h-7 w-7 rounded-lg bg-primary/10 grid place-items-center">
           <Users className="h-3.5 w-3.5 text-primary/70" />
