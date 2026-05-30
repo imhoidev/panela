@@ -17,7 +17,7 @@ import {
   Server, Medal, Star, Users, MapPin,
   Globe, Github, Shield, Sparkles, Clock, Zap,
   Linkedin, ExternalLink, Trophy, Twitter, Hash,
-  Camera, Music, Gamepad2, Youtube,
+  Camera, Music, Gamepad2, Youtube, Calendar,
 } from "lucide-react";
 
 export const Route = createFileRoute("/app/u/$slug")({
