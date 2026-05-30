@@ -95,16 +95,19 @@ async function handleRequest(req, res) {
     }
 
     if (req.method === "POST" && url.pathname === "/api/push/subscribe") {
+      const auth = req.headers["authorization"] || "";
+      const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+      if (!token) { send(res, json({ error: "Unauthorized" }, 401)); return; }
+      const { data: { user: u } } = await sb.auth.getUser(token);
+      if (!u) { send(res, json({ error: "Invalid token" }, 401)); return; }
       const body = JSON.parse(await getBody(req));
       const sub = body.subscription || body;
       const endpoint = sub.endpoint;
       const p256dh = sub.keys?.p256dh || "";
       const authKey = sub.keys?.auth || "";
       if (!endpoint) { send(res, json({ error: "endpoint required" }, 400)); return; }
-      const userId = body.user_id || body.userId;
-      if (!userId) { send(res, json({ error: "user_id required" }, 400)); return; }
-      const { error } = await sb.from("push_subscriptions").upsert({
-        user_id: userId, endpoint, p256dh: p256dh, auth: authKey, user_agent: req.headers["user-agent"] || null,
+      const { error } = await sbAdmin.from("push_subscriptions").upsert({
+        user_id: u.id, endpoint, p256dh, auth: authKey, user_agent: req.headers["user-agent"] || null,
       }, { onConflict: "user_id,endpoint" });
       if (error) { send(res, json({ error: error.message }, 500)); return; }
       send(res, json({ ok: true }));
@@ -112,9 +115,14 @@ async function handleRequest(req, res) {
     }
 
     if (req.method === "POST" && url.pathname === "/api/push/unsubscribe") {
+      const auth = req.headers["authorization"] || "";
+      const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+      if (!token) { send(res, json({ error: "Unauthorized" }, 401)); return; }
+      const { data: { user: u } } = await sb.auth.getUser(token);
+      if (!u) { send(res, json({ error: "Invalid token" }, 401)); return; }
       const body = JSON.parse(await getBody(req));
       if (!body.endpoint) { send(res, json({ error: "endpoint required" }, 400)); return; }
-      const { error } = await sb.from("push_subscriptions").delete().eq("endpoint", body.endpoint);
+      const { error } = await sbAdmin.from("push_subscriptions").delete().eq("endpoint", body.endpoint).eq("user_id", u.id);
       if (error) { send(res, json({ error: error.message }, 500)); return; }
       send(res, json({ ok: true }));
       return;
@@ -126,7 +134,7 @@ async function handleRequest(req, res) {
       if (!token) { send(res, json({ error: "Unauthorized" }, 401)); return; }
       const { data: { user: u } } = await sb.auth.getUser(token);
       if (!u) { send(res, json({ error: "Invalid token" }, 401)); return; }
-      const { data: subs } = await sb.from("push_subscriptions").select("*").eq("user_id", u.id);
+      const { data: subs } = await sbAdmin.from("push_subscriptions").select("*").eq("user_id", u.id);
       if (!subs?.length) { send(res, json({ error: "Nenhuma inscrição encontrada" }, 404)); return; }
       const results = [];
       for (const sub of subs) {
@@ -136,7 +144,7 @@ async function handleRequest(req, res) {
           }, JSON.stringify({ title: "🔔 PANELA", body: "Notificação de teste! Funciona 🎉", icon: "/icon.png", data: { url: "/app" } }));
           results.push({ endpoint: sub.endpoint, ok: true });
         } catch (e) {
-          if (e.statusCode === 410) await sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+          if (e.statusCode === 410) await sbAdmin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
           results.push({ endpoint: sub.endpoint, ok: false, error: e.message });
         }
       }

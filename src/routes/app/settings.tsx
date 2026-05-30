@@ -180,7 +180,7 @@ function PushNotificationsCard() {
       if (!sub) { toast.error("Push não suportado"); return; }
       const res = await fetch(`${apiUrl}/api/push/subscribe`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ subscription: sub.toJSON(), user_id: user.id }),
+        body: JSON.stringify({ subscription: sub.toJSON() }),
       });
       if (!res.ok) { const e = await res.json(); toast.error(e.error || "Erro ao ativar notificações"); return; }
       setSubscribed(true);
