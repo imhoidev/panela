@@ -154,6 +154,7 @@ function ServerLayout() {
         <ServerHeader server={server} serverId={serverId} isOwner={isOwner} onSlugChanged={load} />
         <ChannelsList
           categories={categories} uncategorized={uncategorized} collapsedCats={collapsedCats} toggleCat={toggleCat}
+          channels={channels}
           serverId={serverId} loc={loc} canManage={canManage}
           open={open} setOpen={setOpen} newName={newName} setNewName={setNewName}
           newType={newType} setNewType={setNewType} newCategory={newCategory} setNewCategory={setNewCategory}
@@ -178,6 +179,7 @@ function ServerLayout() {
               <ServerHeader server={server} serverId={serverId} isOwner={isOwner} onSlugChanged={load} />
               <ChannelsList
                 categories={categories} uncategorized={uncategorized} collapsedCats={collapsedCats} toggleCat={toggleCat}
+                channels={channels}
                 serverId={serverId} loc={loc} canManage={canManage}
                 open={open} setOpen={setOpen} newName={newName} setNewName={setNewName}
                 newType={newType} setNewType={setNewType} newCategory={newCategory} setNewCategory={setNewCategory}
@@ -253,7 +255,7 @@ function ServerHeader({ server, serverId, isOwner, onSlugChanged }: any) {
 
 /* ─── Channels List ─── */
 function ChannelsList({
-  categories, uncategorized, collapsedCats, toggleCat,
+  categories, uncategorized, collapsedCats, toggleCat, channels,
   serverId, loc, canManage, open, setOpen, newName, setNewName,
   newType, setNewType, newCategory, setNewCategory, addChannel, deleteChannel,
 }: any) {
