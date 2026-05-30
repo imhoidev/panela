@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, Link, useParams, useRouter, useLocation } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -23,11 +23,38 @@ import { StatusDot } from "@/components/PresenceStatus";
 import { getSocket } from "@/lib/socket";
 import {
   Hash, Plus, Settings, LogOut, Volume2, Menu, Users, Copy, AtSign, Check, Shield,
-  ChevronDown, ChevronRight, Search, MessageSquare, X, Crown, UserMinus,
-  Edit3, Link2, Trash2, Globe, Lock, Bell, BellOff, Pin,
+  ChevronDown, Search, MessageSquare, X, Crown, UserMinus,
+  Edit3, Globe, Lock, ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { slugify, isValidSlug } from "@/lib/slug";
+
+/* ─── Context for child routes ─── */
+type ServerCtx = {
+  server: any;
+  channels: any[];
+  categories: Map<string, any[]>;
+  uncategorized: any[];
+  collapsedCats: Set<string>;
+  toggleCat: (cat: string) => void;
+  mobileChannelsOpen: boolean;
+  setMobileChannelsOpen: (v: boolean) => void;
+  memberLevel: number;
+  canManage: boolean;
+  isOwner: boolean;
+  addChannel: () => void;
+  deleteChannel: (id: string) => void;
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  newName: string;
+  setNewName: (v: string) => void;
+  newType: "text" | "voice" | "announcement";
+  setNewType: (v: any) => void;
+  newCategory: string;
+  setNewCategory: (v: string) => void;
+};
+const ServerCtx_ = createContext<ServerCtx | null>(null);
+export function useServerContext() { return useContext(ServerCtx_); }
 
 export const Route = createFileRoute("/app/servers/$serverId")({
   component: ServerLayout,
@@ -131,7 +158,15 @@ function ServerLayout() {
     loadMembers();
   }
 
-  if (!server) return <div className="p-8 text-muted-foreground">Carregando servidor…</div>;
+  if (!server) return (
+    <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-8 bg-gradient-to-b from-transparent to-card/10">
+      <div className="flex flex-col items-center gap-2">
+        <div className="h-8 w-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+        <span>Carregando servidor…</span>
+      </div>
+    </div>
+  );
+
   const canManage = memberLevel >= 80;
   const isOwner = server.owner_id === user?.id;
   const canKick = memberLevel >= 60;
@@ -147,11 +182,40 @@ function ServerLayout() {
     setCollapsedCats((prev) => { const next = new Set(prev); if (next.has(cat)) next.delete(cat); else next.add(cat); return next; });
   };
 
+  const ctx: ServerCtx = {
+    server, channels, categories, uncategorized, collapsedCats, toggleCat,
+    mobileChannelsOpen, setMobileChannelsOpen, memberLevel, canManage, isOwner,
+    addChannel: () => addChannel(), deleteChannel: (id) => deleteChannel(id),
+    open, setOpen, newName, setNewName, newType, setNewType, newCategory, setNewCategory,
+  };
+
+  const inChannel = loc.pathname.match(/^\/app\/servers\/[^/]+\/[^/]+$/);
+
   return (
     <div className="flex h-full min-h-0">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-60 flex-col border-r border-border bg-sidebar">
-        <ServerHeader server={server} serverId={serverId} isOwner={isOwner} onSlugChanged={load} />
+      <aside className="hidden md:flex w-64 flex-col border-r border-border bg-sidebar/95 shrink-0">
+        <div className="p-3 border-b border-sidebar-border flex items-center gap-2.5">
+          {server.icon_url ? (
+            <img src={server.icon_url} alt="" className="h-9 w-9 rounded-xl object-cover ring-2 ring-sidebar-border/60" />
+          ) : (
+            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary/40 to-primary/10 ring-2 ring-sidebar-border/60 grid place-items-center font-bold text-primary text-sm">
+              {server.name[0]?.toUpperCase()}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <h2 className="font-semibold truncate text-sm leading-tight">{server.name}</h2>
+            <div className="flex items-center gap-1.5 mt-px">
+              <span className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
+                {server.privacy === "private" ? <Lock className="h-2.5 w-2.5" /> : <Globe className="h-2.5 w-2.5" />}
+                {server.member_count} membros
+              </span>
+              {server.slug && <span className="text-[10px] text-muted-foreground/40">· @{server.slug}</span>}
+            </div>
+          </div>
+          {isOwner && server.slug && <SlugEdit slug={server.slug} serverId={serverId} onSaved={load} />}
+        </div>
+
         <ChannelsList
           categories={categories} uncategorized={uncategorized} collapsedCats={collapsedCats} toggleCat={toggleCat}
           channels={channels}
@@ -168,48 +232,49 @@ function ServerLayout() {
       </aside>
 
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-        {/* Mobile top bar */}
-        <div className="md:hidden flex items-center gap-2 px-2 h-11 border-b border-border bg-sidebar/80 shrink-0">
-          <Sheet open={mobileChannelsOpen} onOpenChange={setMobileChannelsOpen}>
-            <SheetTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-8 gap-1.5"><Menu className="h-4 w-4" />Canais</Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="p-0 w-[85vw] max-w-[320px] bg-sidebar flex flex-col">
-              <SheetHeader className="sr-only"><SheetTitle>Canais</SheetTitle><SheetDescription>Lista de canais e ações.</SheetDescription></SheetHeader>
-              <ServerHeader server={server} serverId={serverId} isOwner={isOwner} onSlugChanged={load} />
-              <ChannelsList
-                categories={categories} uncategorized={uncategorized} collapsedCats={collapsedCats} toggleCat={toggleCat}
-                channels={channels}
-                serverId={serverId} loc={loc} canManage={canManage}
-                open={open} setOpen={setOpen} newName={newName} setNewName={setNewName}
-                newType={newType} setNewType={setNewType} newCategory={newCategory} setNewCategory={setNewCategory}
-                addChannel={addChannel} deleteChannel={deleteChannel}
-              />
-              <ServerToolbar
-                canManage={canManage} isOwner={isOwner} serverId={serverId} server={server}
-                leave={leave} settingsOpen={settingsOpen} setSettingsOpen={setSettingsOpen}
-                toolsOpen={toolsOpen} setToolsOpen={setToolsOpen}
-              />
-            </SheetContent>
-          </Sheet>
-          <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <Users className="h-3 w-3" />{server.member_count}
-          </div>
-          <div className="ml-auto flex gap-0.5">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSettingsOpen(true)} title="Configurações">
+        {/* Mobile top bar — only at server root (no channel selected) */}
+        {!inChannel && (
+          <div className="md:hidden flex items-center gap-2 px-3 h-12 border-b border-border bg-sidebar/95 backdrop-blur shrink-0">
+            <Link to="/app/servers" className="md:hidden text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            {server.icon_url ? (
+              <img src={server.icon_url} alt="" className="h-7 w-7 rounded-lg object-cover" />
+            ) : (
+              <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-primary/30 to-primary/10 grid place-items-center font-bold text-primary text-[10px]">
+                {server.name[0]?.toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate leading-tight">{server.name}</p>
+              <p className="text-[10px] text-muted-foreground/60 leading-tight">{server.member_count} membros</p>
+            </div>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSettingsOpen(true)} title="Configurações">
               <Settings className="h-4 w-4" />
             </Button>
           </div>
-        </div>
+        )}
 
-        <div className="flex flex-1 min-h-0">
-          <Outlet />
-          {memberLevel > 0 && (
-            <div className="hidden lg:block">
-              <MemberList serverId={serverId} presence={presence} />
-            </div>
-          )}
-        </div>
+        {/* Mobile channel sheet trigger — floating action button */}
+        {inChannel && (
+          <div className="md:hidden fixed bottom-20 right-4 z-30">
+            <Button size="icon" className="h-12 w-12 rounded-full shadow-xl shadow-black/30 bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => ctx.setMobileChannelsOpen(true)} title="Mudar de canal">
+              <Menu className="h-5 w-5" />
+            </Button>
+          </div>
+        )}
+
+        <ServerCtx_.Provider value={ctx}>
+          <div className="flex flex-1 min-h-0">
+            <Outlet />
+            {memberLevel > 0 && (
+              <div className="hidden lg:block">
+                <MemberList serverId={serverId} presence={presence} />
+              </div>
+            )}
+          </div>
+        </ServerCtx_.Provider>
       </div>
 
       <ResponsiveDialog open={settingsOpen} onOpenChange={setSettingsOpen}
@@ -226,33 +291,6 @@ function ServerLayout() {
   );
 }
 
-/* ─── Server Header ─── */
-function ServerHeader({ server, serverId, isOwner, onSlugChanged }: any) {
-  return (
-    <div className="p-4 border-b border-sidebar-border space-y-2">
-      <div className="flex items-center gap-3">
-        {server.icon_url ? (
-          <img src={server.icon_url} alt="" className="h-10 w-10 rounded-xl object-cover ring-2 ring-sidebar-border" />
-        ) : (
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/30 to-primary/10 ring-2 ring-sidebar-border grid place-items-center font-bold text-primary text-sm">
-            {server.name[0]?.toUpperCase()}
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <h2 className="font-semibold truncate text-sm leading-tight">{server.name}</h2>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-              {server.privacy === "private" ? <Lock className="h-2.5 w-2.5" /> : <Globe className="h-2.5 w-2.5" />}
-              {server.member_count}
-            </span>
-          </div>
-        </div>
-      </div>
-      <SlugTag slug={server.slug} canEdit={isOwner} serverId={serverId} onSaved={onSlugChanged} />
-    </div>
-  );
-}
-
 /* ─── Channels List ─── */
 function ChannelsList({
   categories, uncategorized, collapsedCats, toggleCat, channels,
@@ -261,14 +299,13 @@ function ChannelsList({
 }: any) {
   return (
     <ScrollArea className="flex-1">
-      <div className="p-2 space-y-1">
-        {/* Section header */}
-        <div className="flex items-center justify-between px-2 py-1 text-[10px] uppercase tracking-widest text-muted-foreground/60">
+      <div className="p-2 space-y-0.5">
+        <div className="flex items-center justify-between px-2.5 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/50">
           <span className="font-semibold">Canais</span>
           {canManage && (
             <ResponsiveDialog open={open} onOpenChange={setOpen}
               title="Novo canal"
-              trigger={<button className="hover:text-foreground p-0.5 transition-colors" title="Criar canal"><Plus className="h-3.5 w-3.5" /></button>}>
+              trigger={<button className="hover:text-foreground p-0.5 rounded hover:bg-sidebar-accent/60 transition-colors" title="Criar canal"><Plus className="h-3.5 w-3.5" /></button>}>
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label>Tipo</Label>
@@ -295,30 +332,30 @@ function ChannelsList({
           )}
         </div>
 
-        {/* Uncategorized channels (shown first) */}
         {uncategorized.map((c: any) => (
           <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} />
         ))}
 
-        {/* Categorized channels */}
         {[...categories.entries()].map(([cat, chs]) => (
           <div key={cat}>
             <button
               onClick={() => toggleCat(cat)}
-              className="flex items-center gap-1 w-full px-2 py-1 text-[10px] uppercase tracking-widest text-muted-foreground/60 hover:text-foreground/80 transition-colors rounded"
+              className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/60 hover:text-foreground/80 transition-colors rounded-md hover:bg-sidebar-accent/30"
             >
-              {collapsedCats.has(cat) ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${collapsedCats.has(cat) ? "-rotate-90" : ""}`} />
               <span className="font-semibold">{cat}</span>
-              <span className="ml-auto text-[9px] opacity-50">{chs.length}</span>
+              <span className="ml-auto text-[9px] text-muted-foreground/40 font-mono">{chs.length}</span>
             </button>
-            {!collapsedCats.has(cat) && chs.map((c: any) => (
-              <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} />
-            ))}
+            <div className={`overflow-hidden transition-all duration-200 ${collapsedCats.has(cat) ? "max-h-0 opacity-0" : "max-h-[500px] opacity-100"}`}>
+              {chs.map((c: any) => (
+                <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} />
+              ))}
+            </div>
           </div>
         ))}
 
         {channels.length === 0 && (
-          <p className="text-[11px] text-muted-foreground/50 text-center py-6">Nenhum canal ainda</p>
+          <p className="text-[11px] text-muted-foreground/40 text-center py-8">Nenhum canal ainda</p>
         )}
       </div>
     </ScrollArea>
@@ -332,23 +369,26 @@ function ChannelItem({ c, serverId, loc, canManage, deleteChannel }: any) {
   const Icon = c.type === "voice" ? Volume2 : c.type === "announcement" ? MessageSquare : Hash;
   const iconColor = c.type === "voice" ? "text-emerald-500" : c.type === "announcement" ? "text-amber-500" : "text-primary/70";
   return (
-    <div className="group flex items-center rounded-md">
+    <div className={`${active ? "relative " : ""}group`}>
+      {active && (
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />
+      )}
       <Link
         to="/app/servers/$serverId/$channelId"
         params={{ serverId, channelId: c.id }}
-        className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm flex-1 min-w-0 transition-all ${
+        className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm flex-1 min-w-0 transition-all ml-1 ${
           active
             ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm"
             : "text-muted-foreground/80 hover:bg-sidebar-accent/50 hover:text-foreground"
         }`}
       >
-        <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />
+        <Icon className={`h-4 w-4 shrink-0 ${iconColor} ${active ? "drop-shadow-sm" : ""}`} />
         <span className="truncate text-[13px]">{c.name}</span>
       </Link>
       {canManage && (
         <button
           onClick={() => deleteChannel(c.id)}
-          className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground/50 hover:text-destructive shrink-0 transition-opacity"
+          className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 text-muted-foreground/40 hover:text-destructive shrink-0 transition-all hover:scale-110"
           title="Deletar canal"
         >
           <X className="h-3 w-3" />
@@ -361,10 +401,9 @@ function ChannelItem({ c, serverId, loc, canManage, deleteChannel }: any) {
 /* ─── Server Toolbar ─── */
 function ServerToolbar({ canManage, isOwner, serverId, server, leave, settingsOpen, setSettingsOpen, toolsOpen, setToolsOpen }: any) {
   return (
-    <div className="border-t border-sidebar-border bg-sidebar/80">
-      {/* Collapsible tools row */}
+    <div className="border-t border-sidebar-border bg-sidebar/80 shrink-0">
       {toolsOpen && (
-        <div className="p-2 flex flex-wrap gap-1 border-b border-sidebar-border">
+        <div className="p-2 flex flex-wrap gap-1 border-b border-sidebar-border bg-sidebar/50">
           <ServerRolesDialog serverId={serverId} canManage={canManage} />
           <ServerEventsDialog serverId={serverId} canManage={canManage} />
           <InvitesDialog serverId={serverId} canManage={canManage} />
@@ -372,34 +411,34 @@ function ServerToolbar({ canManage, isOwner, serverId, server, leave, settingsOp
           <BanDialog serverId={serverId} canManage={canManage} />
         </div>
       )}
-      {/* Bottom action row */}
-      <div className="p-1.5 flex items-center gap-0.5">
-        <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 px-2 text-muted-foreground/70 hover:text-foreground"
-          onClick={() => setSettingsOpen(true)}>
-          <Settings className="h-3.5 w-3.5" /> Ajustes
-        </Button>
-        <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 px-2 text-muted-foreground/70 hover:text-foreground"
-          onClick={() => setToolsOpen(!toolsOpen)}>
-          <Shield className="h-3.5 w-3.5" /> Ferram.
-        </Button>
-        <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 px-2 text-destructive/70 hover:text-destructive ml-auto"
-          onClick={leave} title="Sair do servidor">
-          <LogOut className="h-3.5 w-3.5" />
-        </Button>
+      <div className="flex items-center px-1.5 py-1.5">
+        <button onClick={() => setSettingsOpen(true)}
+          className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-xs text-muted-foreground/60 hover:text-foreground hover:bg-sidebar-accent/50 transition-colors" title="Configurações">
+          <Settings className="h-3.5 w-3.5" /><span className="hidden sm:inline">Ajustes</span>
+        </button>
+        {(canManage || isOwner) && (
+          <button onClick={() => setToolsOpen(!toolsOpen)}
+            className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-xs text-muted-foreground/60 hover:text-foreground hover:bg-sidebar-accent/50 transition-colors" title="Ferramentas">
+            <Shield className="h-3.5 w-3.5" /><span className="hidden sm:inline">Ferram.</span>
+          </button>
+        )}
+        <button onClick={leave}
+          className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-md text-xs text-destructive/50 hover:text-destructive hover:bg-destructive/10 transition-colors" title="Sair do servidor">
+          <LogOut className="h-3.5 w-3.5" /><span className="hidden sm:inline">Sair</span>
+        </button>
       </div>
     </div>
   );
 }
 
-/* ─── Slug Tag ─── */
-function SlugTag({ slug, canEdit, serverId, onSaved }: { slug: string | null; canEdit: boolean; serverId: string; onSaved: () => void }) {
+/* ─── Slug Edit (inline compact) ─── */
+function SlugEdit({ slug, serverId, onSaved }: { slug: string; serverId: string; onSaved: () => void }) {
   const [copied, setCopied] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [val, setVal] = useState(slug ?? "");
+  const [val, setVal] = useState(slug);
   const [saving, setSaving] = useState(false);
 
   async function copy() {
-    if (!slug) return;
     const url = `${window.location.origin}/app/s/${slug}`;
     try { await navigator.clipboard.writeText(url); setCopied(true); toast.success("Link copiado!"); setTimeout(() => setCopied(false), 1500); }
     catch { toast.error("Não consegui copiar"); }
@@ -419,36 +458,29 @@ function SlugTag({ slug, canEdit, serverId, onSaved }: { slug: string | null; ca
     setEditOpen(false); onSaved();
   }
 
-  if (!slug) return null;
   return (
-    <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
-      <AtSign className="h-2.5 w-2.5 shrink-0" />
-      <span className="truncate font-mono">{slug}</span>
-      <button onClick={copy} className="p-0.5 rounded hover:bg-sidebar-accent/60 text-muted-foreground/50 hover:text-foreground transition-colors" title="Copiar link">
-        {copied ? <Check className="h-2.5 w-2.5 text-primary" /> : <Copy className="h-2.5 w-2.5" />}
+    <div className="flex items-center gap-0.5">
+      <button onClick={copy} className="p-1 rounded hover:bg-sidebar-accent/60 text-muted-foreground/40 hover:text-foreground transition-colors" title="Copiar link do servidor">
+        {copied ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
       </button>
-      {canEdit && (
-        <ResponsiveDialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (o) setVal(slug); }}
-          title="Editar slug"
-          trigger={
-            <button className="p-0.5 rounded hover:bg-sidebar-accent/60 text-muted-foreground/50 hover:text-foreground transition-colors" title="Editar slug">
-              <Edit3 className="h-2.5 w-2.5" />
-            </button>
-          }>
-          <div className="space-y-3">
-            <div className="space-y-1.5"><Label>Slug</Label>
-              <div className="relative">
-                <AtSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input className="pl-8 font-mono h-10" value={val} onChange={(e) => setVal(slugify(e.target.value))} maxLength={32} />
-              </div>
-              <p className="text-xs text-muted-foreground">panela.app/s/{slugify(val) || "—"}</p>
+      <button onClick={() => { setEditOpen(true); setVal(slug); }}
+        className="p-1 rounded hover:bg-sidebar-accent/60 text-muted-foreground/40 hover:text-foreground transition-colors" title="Editar slug">
+        <Edit3 className="h-3 w-3" />
+      </button>
+      <ResponsiveDialog open={editOpen} onOpenChange={setEditOpen} title="Editar slug">
+        <div className="space-y-3">
+          <div className="space-y-1.5"><Label>Slug</Label>
+            <div className="relative">
+              <AtSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input className="pl-8 font-mono h-10" value={val} onChange={(e) => setVal(slugify(e.target.value))} maxLength={32} />
             </div>
-            <Button className="w-full h-10" onClick={save} disabled={saving || slugify(val) === slug}>
-              {saving ? "Salvando…" : "Salvar"}
-            </Button>
+            <p className="text-xs text-muted-foreground">panela.app/s/{slugify(val) || "—"}</p>
           </div>
-        </ResponsiveDialog>
-      )}
+          <Button className="w-full h-10" onClick={save} disabled={saving || slugify(val) === slug}>
+            {saving ? "Salvando…" : "Salvar"}
+          </Button>
+        </div>
+      </ResponsiveDialog>
     </div>
   );
 }
@@ -458,20 +490,68 @@ function ServerSettingsPanel({
   server, serverId, isOwner, canManage, canKick, members, memberSearch, setMemberSearch,
   kickMember, presence, onServerUpdate,
 }: any) {
+  const router = useRouter();
   const [tab, setTab] = useState("overview");
   const [editName, setEditName] = useState(server.name);
   const [editDesc, setEditDesc] = useState(server.description ?? "");
+  const [editPrivacy, setEditPrivacy] = useState(server.privacy || "public");
   const [saving, setSaving] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setEditName(server.name);
+    setEditDesc(server.description ?? "");
+    setEditPrivacy(server.privacy || "public");
+  }, [server.name, server.description, server.privacy]);
 
   async function saveSettings() {
     setSaving(true);
     const { error } = await supabase.from("servers").update({
-      name: editName.trim(), description: editDesc.trim() || null,
+      name: editName.trim(), description: editDesc.trim() || null, privacy: editPrivacy,
     }).eq("id", serverId);
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("Servidor atualizado!");
-    onServerUpdate({ ...server, name: editName.trim(), description: editDesc.trim() || null });
+    onServerUpdate({ ...server, name: editName.trim(), description: editDesc.trim() || null, privacy: editPrivacy });
+  }
+
+  async function uploadIcon(file: File) {
+    if (uploadingIcon) return;
+    setUploadingIcon(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || "";
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("server_id", serverId);
+      const { data: sess } = await supabase.auth.getSession();
+      const res = await fetch(`${apiUrl}/api/upload-server-icon`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sess.session?.access_token}` },
+        body: formData,
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Upload falhou"); }
+      const { url } = await res.json();
+      await supabase.from("servers").update({ icon_url: url }).eq("id", serverId);
+      onServerUpdate({ ...server, icon_url: url });
+      toast.success("Ícone atualizado!");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setUploadingIcon(false);
+    }
+  }
+
+  async function deleteServer() {
+    if (!confirm("TEM CERTEZA? Esta ação é irreversível. Todos os canais, mensagens e dados serão perdidos.")) return;
+    if (!confirm("Sério mesmo? Digite CONFIRMAR para deletar.")) return;
+    setDeleting(true);
+    const { error } = await supabase.from("servers").delete().eq("id", serverId);
+    setDeleting(false);
+    if (error) return toast.error(error.message);
+    toast.success("Servidor deletado.");
+    router.navigate({ to: "/app/servers" });
   }
 
   const filteredMembers = members.filter((m: any) => {
@@ -484,15 +564,30 @@ function ServerSettingsPanel({
   return (
     <Tabs value={tab} onValueChange={setTab} className="flex flex-col h-full">
       <div className="p-4 md:p-5 pb-0">
-        {/* Server info on top */}
         <div className="flex items-center gap-3 mb-3">
-          {server.icon_url
-            ? <img src={server.icon_url} className="h-9 w-9 rounded-xl object-cover" alt="" />
-            : <div className="h-9 w-9 rounded-xl bg-primary/15 grid place-items-center font-bold text-primary text-sm">{server.name[0]}</div>
-          }
+          <div className="relative shrink-0">
+            {server.icon_url ? (
+              <img src={server.icon_url} className="h-10 w-10 rounded-xl object-cover ring-2 ring-border" alt="" />
+            ) : (
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/30 to-primary/10 ring-2 ring-border grid place-items-center font-bold text-primary text-base">
+                {server.name[0]?.toUpperCase()}
+              </div>
+            )}
+            {canManage && (
+              <>
+                <input type="file" ref={fileRef} className="hidden" accept="image/*"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadIcon(f); e.target.value = ""; }} />
+                <button onClick={() => fileRef.current?.click()} disabled={uploadingIcon}
+                  className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-primary text-primary-foreground grid place-items-center text-[10px] border-2 border-background hover:scale-110 transition-transform disabled:opacity-50"
+                  title="Trocar ícone">
+                  {uploadingIcon ? "..." : "✎"}
+                </button>
+              </>
+            )}
+          </div>
           <div className="min-w-0">
             <h3 className="font-semibold text-sm truncate">{server.name}</h3>
-            <p className="text-[11px] text-muted-foreground">{server.member_count} membros · {server.privacy === "private" ? "Privado" : "Público"}</p>
+            <p className="text-[11px] text-muted-foreground">{server.member_count} membros · {editPrivacy === "private" ? "Privado" : "Público"}</p>
           </div>
         </div>
         <TabsList className="w-full grid grid-cols-3 h-9">
@@ -505,77 +600,114 @@ function ServerSettingsPanel({
       <div className="flex-1 overflow-auto p-4 md:p-5 space-y-4">
         <TabsContent value="overview" className="mt-0 space-y-4">
           {canManage && (
-            <div className="rounded-lg border border-border p-4 space-y-3 bg-accent/20">
+            <div className="rounded-xl border border-border p-4 sm:p-5 space-y-4 bg-accent/15">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Editar servidor</h4>
               <div className="space-y-1.5">
-                <Label className="text-xs">Nome</Label>
-                <Input value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={48} className="h-9 text-sm" />
+                <Label className="text-xs text-muted-foreground">Nome</Label>
+                <Input value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={48} className="h-10 text-sm" placeholder="Nome do servidor" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Descrição</Label>
-                <Textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} maxLength={300} rows={3} className="text-sm" />
+                <Label className="text-xs text-muted-foreground">Descrição</Label>
+                <Textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} maxLength={300} rows={3} className="text-sm resize-none" placeholder="Descrição do servidor..." />
               </div>
-              <Button onClick={saveSettings} disabled={saving} size="sm" className="h-9">
-                {saving ? "Salvando..." : "Salvar alterações"}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Visibilidade</Label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setEditPrivacy("public")}
+                    className={`flex-1 flex items-center justify-center gap-2 rounded-lg border h-10 text-sm transition-all ${
+                      editPrivacy === "public" ? "border-primary bg-primary/10 text-primary font-medium" : "border-border text-muted-foreground hover:border-muted-foreground/30"
+                    }`}>
+                    <Globe className="h-4 w-4" /> Público
+                  </button>
+                  <button type="button" onClick={() => setEditPrivacy("private")}
+                    className={`flex-1 flex items-center justify-center gap-2 rounded-lg border h-10 text-sm transition-all ${
+                      editPrivacy === "private" ? "border-primary bg-primary/10 text-primary font-medium" : "border-border text-muted-foreground hover:border-muted-foreground/30"
+                    }`}>
+                    <Lock className="h-4 w-4" /> Privado
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button onClick={saveSettings} disabled={saving} className="h-10 flex-1">
+                  {saving ? "Salvando..." : "Salvar alterações"}
+                </Button>
+                {editName !== server.name || editDesc !== (server.description ?? "") || editPrivacy !== (server.privacy || "public") ? (
+                  <Button variant="ghost" onClick={() => { setEditName(server.name); setEditDesc(server.description ?? ""); setEditPrivacy(server.privacy || "public"); }} className="h-10">
+                    Cancelar
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          )}
+          <div className="rounded-xl border border-border p-4 sm:p-5 space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Informações</h4>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
+              <div><span className="text-muted-foreground/60">ID</span><p className="font-mono text-[10px] truncate mt-0.5 text-muted-foreground/80">{serverId}</p></div>
+              <div><span className="text-muted-foreground/60">Slug</span><p className="mt-0.5 text-muted-foreground/80">@{server.slug || "—"}</p></div>
+              <div><span className="text-muted-foreground/60">Criado em</span><p className="mt-0.5 text-muted-foreground/80">{new Date(server.created_at).toLocaleDateString("pt-BR")}</p></div>
+              <div><span className="text-muted-foreground/60">Membros</span><p className="mt-0.5 text-muted-foreground/80">{server.member_count}</p></div>
+            </div>
+          </div>
+          {isOwner && (
+            <div className="rounded-xl border border-destructive/20 p-4 sm:p-5 space-y-3 bg-destructive/5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-destructive/80">Zona de Perigo</h4>
+              <p className="text-xs text-muted-foreground">Deletar o servidor remove todos os canais, mensagens e arquivos. Esta ação não pode ser desfeita.</p>
+              <Button variant="destructive" onClick={deleteServer} disabled={deleting} className="h-10">
+                {deleting ? "Deletando..." : "Deletar servidor"}
               </Button>
             </div>
           )}
-          <div className="rounded-lg border border-border p-4 space-y-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Informações</h4>
-            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-              <div><span className="text-foreground/60">ID</span><p className="font-mono text-[10px] truncate">{serverId}</p></div>
-              <div><span className="text-foreground/60">Slug</span><p>@{server.slug || "—"}</p></div>
-              <div><span className="text-foreground/60">Criado em</span><p>{new Date(server.created_at).toLocaleDateString("pt-BR")}</p></div>
-              <div><span className="text-foreground/60">Membros</span><p>{server.member_count}</p></div>
-            </div>
-          </div>
         </TabsContent>
 
         <TabsContent value="members" className="mt-0 space-y-3">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)}
-              placeholder="Buscar membros..." className="pl-8 h-9 text-sm" />
+              placeholder="Buscar membros..." className="pl-8 h-10 text-sm" />
           </div>
-          <ScrollArea className="h-[280px] -mx-1 px-1">
-            <div className="space-y-0.5">
-              {filteredMembers.map((m: any) => {
-                const p = m.profiles;
-                const status = presence.get(m.user_id);
-                const online = status != null;
-                return (
-                  <div key={m.user_id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent/30 transition-colors">
-                    <Avatar className="h-8 w-8 shrink-0">
-                      <AvatarImage src={p?.avatar_url ?? undefined} />
-                      <AvatarFallback className="text-[10px]">{p?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <StatusDot status={online ? status : "offline"} />
-                        <p className="text-sm font-medium truncate">{p?.display_name || p?.username}</p>
-                        {m.user_id === server.owner_id && <Crown className="h-3 w-3 text-gold shrink-0" />}
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">Nível {m.level} · @{p?.username}</p>
-                    </div>
-                    <LevelBadge xp={m.xp ?? 0} size="sm" />
-                    {canKick && m.user_id !== server.owner_id && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground/50 hover:text-destructive shrink-0"
-                        onClick={() => kickMember(m.user_id)} title="Remover">
-                        <UserMinus className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
-              {filteredMembers.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-6">Nenhum membro encontrado.</p>
-              )}
+          {filteredMembers.length === 0 ? (
+            <div className="flex flex-col items-center py-12 text-muted-foreground/60">
+              <Users className="h-8 w-8 mb-2 opacity-40" />
+              <p className="text-xs font-medium">{memberSearch ? "Ninguém encontrado" : "Nenhum membro"}</p>
             </div>
-          </ScrollArea>
+          ) : (
+            <ScrollArea className="h-[280px] -mx-1 px-1">
+              <div className="space-y-0.5">
+                {filteredMembers.map((m: any) => {
+                  const p = m.profiles;
+                  const status = presence.get(m.user_id);
+                  const online = status != null;
+                  return (
+                    <div key={m.user_id} className="flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-accent/30 transition-colors">
+                      <Avatar className="h-9 w-9 shrink-0 ring-1 ring-border/30">
+                        <AvatarImage src={p?.avatar_url ?? undefined} />
+                        <AvatarFallback className="text-[10px]">{p?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`h-2 w-2 rounded-full shrink-0 ${online ? (status === "idle" ? "bg-yellow-500" : status === "dnd" ? "bg-red-500" : "bg-emerald-500") : "bg-muted-foreground/30"}`} />
+                          <p className="text-sm font-medium truncate">{p?.display_name || p?.username}</p>
+                          {m.user_id === server.owner_id && <Crown className="h-3 w-3 text-yellow-500 shrink-0" />}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground/70">@{p?.username} · Nível {m.level}</p>
+                      </div>
+                      <LevelBadge xp={m.xp ?? 0} size="sm" />
+                      {canKick && m.user_id !== server.owner_id && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0"
+                          onClick={() => kickMember(m.user_id)} title="Remover membro">
+                          <UserMinus className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          )}
         </TabsContent>
 
         <TabsContent value="roles" className="mt-0 space-y-3">
-          <p className="text-sm text-muted-foreground">Gerencie os cargos e permissões do servidor.</p>
+          <p className="text-sm text-muted-foreground/70">Gerencie os cargos e permissões do servidor.</p>
           <ServerRolesDialog serverId={serverId} canManage={canManage} />
         </TabsContent>
       </div>

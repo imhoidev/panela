@@ -10,16 +10,18 @@ import { UsernameBadge } from "@/components/UsernameBadge";
 import { VoiceRoom } from "@/components/VoiceRoom";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { GifPicker } from "@/components/GifPicker";
 import { StickerPicker } from "@/components/StickerPicker";
 import { ReportDialog } from "@/components/ModPanel";
 import { MemberList } from "@/components/MemberList";
 import { getSocket } from "@/lib/socket";
 import { toast } from "sonner";
+import { useServerContext } from "./$serverId";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Hash, SendHorizontal, Smile, CornerUpLeft, X, Trash2, Pencil, Check, Volume2, ArrowLeft,
-  Paperclip, MessageSquare, Users, Circle, AtSign,
+  Paperclip, MessageSquare, Users, Circle, AtSign, Menu,
 } from "lucide-react";
 
 const EMOJIS = ["👍", "❤️", "🔥", "😂", "🥹", "🤝", "👀", "🎉", "💯", "🍳"];
@@ -209,6 +211,7 @@ function ChannelView() {
   function insertGif(url: string) { setText((prev) => prev + ` ![gif](${url}) `); }
   function insertSticker(url: string) { setText((prev) => prev + ` ![sticker](${url}) `); }
 
+  const ctx = useServerContext();
   if (!channel) return <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-8">Carregando canal…</div>;
 
   const isVoice = channel.type === "voice";
@@ -218,13 +221,54 @@ function ChannelView() {
     <div className="flex flex-col h-full bg-gradient-to-b from-transparent to-card/10">
       {/* ─── Channel Header ─── */}
       <header className="h-12 border-b border-border/80 px-3 sm:px-5 flex items-center gap-2.5 bg-card/20 backdrop-blur-sm shrink-0">
-        <Link to="/app/servers/$serverId" params={{ serverId }} className="md:hidden">
-          <Button variant="ghost" size="icon" className="h-8 w-8"><ArrowLeft className="h-4 w-4" /></Button>
-        </Link>
-        <div className={`h-7 w-7 rounded-lg grid place-items-center ${isVoice ? "bg-emerald-500/15" : "bg-primary/10"}`}>
+        {/* Mobile: channel switcher + back */}
+        <div className="flex items-center gap-1 md:hidden">
+          <Sheet open={ctx?.mobileChannelsOpen} onOpenChange={ctx?.setMobileChannelsOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Mudar de canal">
+                <Menu className="h-4 w-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="p-0 w-[85vw] max-w-[320px] bg-sidebar flex flex-col">
+              <SheetHeader className="sr-only"><SheetTitle>Canais</SheetTitle><SheetDescription>Navegar entre canais.</SheetDescription></SheetHeader>
+              <div className="p-3 border-b border-sidebar-border flex items-center gap-2.5">
+                {ctx?.server?.icon_url ? (
+                  <img src={ctx.server.icon_url} alt="" className="h-9 w-9 rounded-xl object-cover" />
+                ) : (
+                  <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary/40 to-primary/10 grid place-items-center font-bold text-primary text-sm">
+                    {ctx?.server?.name?.[0]?.toUpperCase() || "S"}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-semibold truncate text-sm">{ctx?.server?.name || "Servidor"}</h2>
+                  <p className="text-[10px] text-muted-foreground/60">{ctx?.channels?.length || 0} canais</p>
+                </div>
+              </div>
+              <ScrollArea className="flex-1">
+                <div className="p-2 space-y-0.5">
+                  {ctx?.uncategorized?.map((c: any) => (
+                    <MobileChannelLink key={c.id} c={c} serverId={serverId} currentId={channelId} />
+                  ))}
+                  {[...(ctx?.categories?.entries() || [])].map(([cat, chs]) => (
+                    <div key={cat}>
+                      <p className="text-[10px] uppercase tracking-widest text-muted-foreground/50 font-semibold px-2.5 py-1.5">{cat}</p>
+                      {chs.map((c: any) => (
+                        <MobileChannelLink key={c.id} c={c} serverId={serverId} currentId={channelId} />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </SheetContent>
+          </Sheet>
+        </div>
+        <div className={`h-7 w-7 rounded-lg grid place-items-center shrink-0 ${isVoice ? "bg-emerald-500/15" : "bg-primary/10"}`}>
           {isVoice ? <Volume2 className="h-4 w-4 text-emerald-500" /> : <Hash className="h-4 w-4 text-primary" />}
         </div>
-        <h2 className="font-semibold text-sm truncate">{channel.name}</h2>
+        <div className="min-w-0 flex-1 md:flex-initial">
+          <h2 className="font-semibold text-sm truncate">{channel.name}</h2>
+          <p className="text-[10px] text-muted-foreground/50 md:hidden truncate -mt-px">{ctx?.server?.name}</p>
+        </div>
         {channel.topic && (
           <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground/70 border-l border-border/60 pl-3 ml-1 truncate max-w-[200px]">
             <AtSign className="h-3 w-3 shrink-0" />{channel.topic}
@@ -479,4 +523,23 @@ function reactionsGrouped(all: Reaction[], msgId: string): Array<[string, Reacti
   const map = new Map<string, Reaction[]>();
   for (const r of all) { if (r.message_id !== msgId) continue; const arr = map.get(r.emoji) ?? []; arr.push(r); map.set(r.emoji, arr); }
   return Array.from(map.entries());
+}
+
+function MobileChannelLink({ c, serverId, currentId }: { c: any; serverId: string; currentId: string }) {
+  const active = currentId === c.id;
+  const Icon = c.type === "voice" ? Volume2 : c.type === "announcement" ? MessageSquare : Hash;
+  return (
+    <Link
+      to="/app/servers/$serverId/$channelId"
+      params={{ serverId, channelId: c.id }}
+      className={`flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-all ${
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+          : "text-muted-foreground/80 hover:bg-sidebar-accent/50 hover:text-foreground"
+      }`}
+    >
+      <Icon className={`h-4 w-4 shrink-0 ${c.type === "voice" ? "text-emerald-500" : c.type === "announcement" ? "text-amber-500" : "text-primary/70"}`} />
+      <span className="truncate">{c.name}</span>
+    </Link>
+  );
 }

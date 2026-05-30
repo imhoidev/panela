@@ -222,6 +222,31 @@ async function handleRequest(req, res) {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/upload-server-icon") {
+      const auth = req.headers["authorization"] || "";
+      const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+      if (!token) { send(res, json({ error: "Unauthorized" }, 401)); return; }
+      const { data: { user: u }, error: ue } = await sb.auth.getUser(token);
+      if (ue || !u) { send(res, json({ error: "Invalid token" }, 401)); return; }
+      const body = await getBody(req);
+      const ct = req.headers["content-type"] || "";
+      if (!ct.includes("multipart/form-data")) { send(res, json({ error: "Expected multipart/form-data" }, 400)); return; }
+      const boundary = ct.split("boundary=")[1];
+      const parts = parseMultipart(body, boundary);
+      const filePart = parts.find((p) => p.name === "file");
+      const serverId = parts.find((p) => p.name === "server_id")?.value;
+      if (!filePart || !serverId) { send(res, json({ error: "file and server_id required" }, 400)); return; }
+      const { data: member } = await sb.from("server_members").select("level").eq("server_id", serverId).eq("user_id", u.id).maybeSingle();
+      if (!member || member.level < 80) { send(res, json({ error: "Sem permissão" }, 403)); return; }
+      const bucket = "icons";
+      const path = `servers/${serverId}/${Date.now()}-${filePart.filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const { error: upErr } = await sb.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: true });
+      if (upErr) { send(res, json({ error: upErr.message }, 500)); return; }
+      const { data: pub } = sb.storage.from(bucket).getPublicUrl(path);
+      send(res, json({ url: pub.publicUrl }));
+      return;
+    }
+
     send(res, json({ error: "not found" }, 404));
   } catch (e) {
     console.error("request error", url.pathname, e);
