@@ -8,14 +8,13 @@ import { Track } from "livekit-client";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Loader2, PhoneOff, Phone, Sparkles, Maximize2, Minimize2, Mic, MicOff,
-  Camera, CameraOff, Monitor,
+  Camera, Monitor,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
-
 type TokenRes = { token: string; url: string; identity: string; name: string };
 
 export function VoiceRoom({
@@ -43,15 +42,10 @@ export function VoiceRoom({
       setJoined(true);
     } catch (e: any) {
       toast.error(e.message ?? "Erro ao entrar na sala");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
-  useEffect(() => {
-    if (defaultJoined && !token && !loading) join();
-  }, [defaultJoined]);
-
+  useEffect(() => { if (defaultJoined && !token && !loading) join(); }, [defaultJoined]);
   const handleEscape = useCallback(() => { setFocusedId(null); }, []);
   useEffect(() => { document.addEventListener("keydown", handleEscape); return () => document.removeEventListener("keydown", handleEscape); }, [handleEscape]);
 
@@ -66,7 +60,7 @@ export function VoiceRoom({
         </div>
         <div className="space-y-1.5 max-w-sm">
           <p className="text-xl font-semibold">Canal de voz</p>
-          <p className="text-sm text-muted-foreground">Entre pra falar com a galera em tempo real. Microfone, câmera e tela.</p>
+          <p className="text-sm text-muted-foreground">Entre pra falar com a galera em tempo real.</p>
         </div>
         <Button onClick={join} disabled={loading} size="lg" className="min-w-[180px] h-11">
           {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
@@ -89,22 +83,17 @@ export function VoiceRoom({
     >
       <div className="flex flex-col h-full bg-gradient-to-b from-background to-card/40">
         <div className="flex-1 min-h-0 overflow-auto p-3 sm:p-4">
-          <StageInner
-            focusedId={focusedId}
-            onFocus={setFocusedId}
-          />
+          <StageInner focusedId={focusedId} onFocus={setFocusedId} />
         </div>
-        <div className="border-t border-border bg-card/70 backdrop-blur supports-[backdrop-filter]:bg-card/60 px-3 sm:px-5 py-3 sm:py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="border-t border-border bg-card/70 backdrop-blur px-3 sm:px-5 py-3 sm:py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto max-w-3xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div className="flex-1 min-w-0 flex items-center justify-center sm:justify-start">
-              <VoiceControls />
+            <div className="flex-1 flex items-center justify-center sm:justify-start">
+              <div className="flex items-center gap-2 sm:gap-3 rounded-full bg-background/60 border border-border px-2 sm:px-3 py-1.5">
+                <ControlBar variation="minimal" controls={{ microphone: true, camera: true, screenShare: true, chat: false, leave: false }} />
+              </div>
             </div>
-            <Button
-              variant="destructive"
-              size="lg"
-              className="h-11 rounded-full px-5 shrink-0"
-              onClick={() => { setJoined(false); setToken(null); setFocusedId(null); }}
-            >
+            <Button variant="destructive" size="lg" className="h-11 rounded-full px-5 shrink-0"
+              onClick={() => { setJoined(false); setToken(null); setFocusedId(null); }}>
               <PhoneOff className="h-4 w-4 mr-2" /> Sair
             </Button>
           </div>
@@ -115,42 +104,26 @@ export function VoiceRoom({
   );
 }
 
-function VoiceControls() {
-  return (
-    <div className="flex items-center gap-2 sm:gap-3 rounded-full bg-background/60 border border-border px-2 sm:px-3 py-1.5">
-      <ControlBar
-        variation="minimal"
-        controls={{ microphone: true, camera: true, screenShare: true, chat: false, leave: false }}
-      />
-    </div>
-  );
-}
-
-function StageInner({
-  focusedId, onFocus,
-}: {
-  focusedId: string | null;
-  onFocus: (id: string | null) => void;
-}) {
+function StageInner({ focusedId, onFocus }: { focusedId: string | null; onFocus: (id: string | null) => void }) {
   const remoteParticipants = useRemoteParticipants();
   const { localParticipant } = useLocalParticipant();
-  const cameraTracks = useTracks([Track.Source.Camera]);
-  const screenTracks = useTracks([Track.Source.ScreenShare]);
+  const allTracks = useTracks();
 
   const participants = useMemo(() => {
     return [localParticipant, ...remoteParticipants].filter(Boolean);
   }, [localParticipant, remoteParticipants]);
 
-  const getTrack = useCallback((identity: string) => {
-    return cameraTracks.find(t => t.participant.identity === identity);
-  }, [cameraTracks]);
+  const hasActiveCamera = useCallback((p: any) => {
+    return p.isCameraEnabled && allTracks.some(t => t.participant.identity === p.identity && t.source === Track.Source.Camera);
+  }, [allTracks]);
 
-  const getScreenTrack = useCallback((identity: string) => {
-    return screenTracks.find(t => t.participant.identity === identity);
-  }, [screenTracks]);
+  const hasActiveScreen = useCallback((p: any) => {
+    return p.isScreenShareEnabled && allTracks.some(t => t.participant.identity === p.identity && t.source === Track.Source.ScreenShare);
+  }, [allTracks]);
 
-  const hasVideo = useCallback((identity: string) => !!getTrack(identity), [getTrack]);
-  const hasScreen = useCallback((identity: string) => !!getScreenTrack(identity), [getScreenTrack]);
+  const getTrack = useCallback((p: any, source: Track.Source) => {
+    return allTracks.find(t => t.participant.identity === p.identity && t.source === source) || null;
+  }, [allTracks]);
 
   if (participants.length === 0) {
     return (
@@ -160,53 +133,41 @@ function StageInner({
     );
   }
 
-  const focusTarget = focusedId ? participants.find(p => p.identity === focusedId) : participants[0];
+  const focusTarget = focusedId ? participants.find(p => p.identity === focusedId) : null;
   const gridCols = participants.length <= 2 ? "grid-cols-1 sm:grid-cols-2" : participants.length <= 4 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
 
   if (focusTarget && participants.length > 1) {
     return (
       <div className="h-full flex flex-col gap-3">
         <div className="relative flex-1 min-h-0 rounded-2xl overflow-hidden bg-black/40">
-          {hasVideo(focusTarget.identity) ? (
-            <VideoTrack
-              trackRef={getTrack(focusTarget.identity)!}
-              className="h-full w-full object-contain"
-            />
-          ) : hasScreen(focusTarget.identity) ? (
-            <VideoTrack
-              trackRef={getScreenTrack(focusTarget.identity)!}
-              className="h-full w-full object-contain"
-            />
-          ) : (
-            <ParticipantFace participant={focusTarget} large />
-          )}
-          <div className="absolute bottom-3 left-3 flex items-center gap-2 z-10">
-            <ParticipantBadge participant={focusTarget} />
+          {renderVideoOrAvatar(focusTarget, hasActiveScreen, hasActiveCamera, getTrack, true)}
+
+          <div className="absolute bottom-3 left-3 z-10">
+            <ParticipantBadge participant={focusTarget} hasCamera={hasActiveCamera(focusTarget)} hasScreen={hasActiveScreen(focusTarget)} />
           </div>
           <div className="absolute top-3 right-3 z-10">
             <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur"
-              onClick={() => onFocus(focusedId ? null : focusTarget.identity)}>
-              <Maximize2 className="h-4 w-4" />
+              onClick={() => onFocus(null)}>
+              <Minimize2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
+
         <div className="flex gap-2 overflow-x-auto pb-1 shrink-0">
           {participants.filter(p => p.identity !== focusTarget.identity).map(p => (
             <button key={p.identity} onClick={() => onFocus(p.identity)}
-              className="shrink-0 relative w-28 h-20 rounded-xl overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all bg-black/40">
-              {hasVideo(p.identity) ? (
-                <VideoTrack trackRef={getTrack(p.identity)!} className="h-full w-full object-cover" />
+              className="shrink-0 relative w-28 h-20 rounded-xl overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all bg-black/40 cursor-pointer">
+              {hasActiveCamera(p) || hasActiveScreen(p) ? (
+                <VideoTrack trackRef={getTrack(p, hasActiveScreen(p) ? Track.Source.ScreenShare : Track.Source.Camera)!} className="h-full w-full object-cover" />
               ) : (
                 <div className="h-full w-full grid place-items-center">
-                  <div className="h-8 w-8 rounded-full bg-accent/80 grid place-items-center text-xs font-bold text-foreground">
-                    {initialName(p)}
-                  </div>
+                  <ParticipantAvatar participant={p} className="h-8 w-8" textSize="text-xs" />
                 </div>
               )}
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 py-1">
                 <p className="text-[10px] text-white/90 truncate flex items-center gap-1">
                   {p.isMicrophoneEnabled === false && <MicOff className="h-2.5 w-2.5 text-red-400" />}
-                  {p.name || p.identity.slice(0, 8)}
+                  {p.name || p.identity.slice(0, 6)}
                 </p>
               </div>
             </button>
@@ -219,29 +180,39 @@ function StageInner({
   return (
     <div className={`grid ${gridCols} gap-3 auto-rows-fr`} style={{ minHeight: participants.length === 1 ? "100%" : undefined }}>
       {participants.map(p => {
-        const videoTrack = getTrack(p.identity);
-        const screenTrack = getScreenTrack(p.identity);
-        const showVideo = videoTrack || screenTrack;
+        const hasCam = hasActiveCamera(p);
+        const hasScr = hasActiveScreen(p);
+        const showVideo = hasScr || hasCam;
+        const videoTrack = showVideo ? getTrack(p, hasScr ? Track.Source.ScreenShare : Track.Source.Camera) : null;
         return (
           <div key={p.identity}
             className={`relative rounded-2xl overflow-hidden bg-black/40 border-2 transition-all min-h-[120px] ${
               p.isSpeaking ? "border-emerald-500/60 shadow-lg shadow-emerald-500/10" : "border-transparent"
             }`}>
-            {showVideo ? (
-              <VideoTrack
-                trackRef={videoTrack || screenTrack!}
-                className="h-full w-full object-contain"
-              />
+            {showVideo && videoTrack ? (
+              <VideoTrack trackRef={videoTrack} className="h-full w-full object-contain" />
             ) : (
-              <ParticipantFace participant={p} />
+              <div className="h-full w-full flex flex-col items-center justify-center gap-2 p-4">
+                <ParticipantAvatar participant={p} className="h-14 w-14" textSize="text-lg" speaking={p.isSpeaking} />
+                <span className="font-medium text-foreground/80 text-sm truncate max-w-full text-center">
+                  {p.name || p.identity.slice(0, 6)}
+                </span>
+                {p.isSpeaking && (
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-500">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />Falando
+                  </span>
+                )}
+              </div>
             )}
             <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-              <ParticipantBadge participant={p} />
-              <Button size="icon" variant="ghost"
-                className="h-7 w-7 rounded-full bg-black/40 hover:bg-black/60 text-white/70"
-                onClick={() => onFocus(p.identity)}>
-                <Maximize2 className="h-3 w-3" />
-              </Button>
+              <ParticipantBadge participant={p} hasCamera={hasCam} hasScreen={hasScr} />
+              {participants.length > 1 && (
+                <Button size="icon" variant="ghost"
+                  className="h-7 w-7 rounded-full bg-black/40 hover:bg-black/60 text-white/70"
+                  onClick={() => onFocus(p.identity)}>
+                  <Maximize2 className="h-3 w-3" />
+                </Button>
+              )}
             </div>
           </div>
         );
@@ -250,47 +221,57 @@ function StageInner({
   );
 }
 
-function ParticipantFace({ participant, large }: { participant: any; large?: boolean }) {
-  const name = participant.name || participant.identity || "Alguém";
+function renderVideoOrAvatar(p: any, hasScreen: (p: any) => boolean, hasCamera: (p: any) => boolean, getTrack: (p: any, s: Track.Source) => any, large: boolean) {
+  if (hasScreen(p)) {
+    return <VideoTrack trackRef={getTrack(p, Track.Source.ScreenShare)!} className="h-full w-full object-contain" />;
+  }
+  if (hasCamera(p)) {
+    return <VideoTrack trackRef={getTrack(p, Track.Source.Camera)!} className="h-full w-full object-contain" />;
+  }
   return (
-    <div className={`h-full w-full flex flex-col items-center justify-center gap-3 ${
-      large ? "p-8" : "p-4"
-    }`}>
-      <div className={`rounded-full grid place-items-center font-bold text-foreground transition-all ${
-        participant.isSpeaking
-          ? "bg-emerald-500/20 ring-3 ring-emerald-500/50 scale-105"
-          : "bg-accent/60"
-      } ${large ? "h-20 w-20 text-2xl" : "h-14 w-14 text-lg"}`}>
-        {initialName(participant)}
-      </div>
+    <div className={`h-full w-full flex flex-col items-center justify-center gap-3 ${large ? "p-8" : "p-4"}`}>
+      <ParticipantAvatar participant={p} className={large ? "h-20 w-20" : "h-14 w-14"} textSize={large ? "text-2xl" : "text-lg"} speaking={p.isSpeaking} />
       <span className={`font-medium text-foreground/80 truncate max-w-full text-center ${large ? "text-lg" : "text-sm"}`}>
-        {name}
+        {p.name || p.identity.slice(0, 6)}
       </span>
-      {participant.isSpeaking && (
+      {p.isSpeaking && (
         <span className="flex items-center gap-1.5 text-xs text-emerald-500">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          Falando
+          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />Falando
         </span>
       )}
     </div>
   );
 }
 
-function ParticipantBadge({ participant }: { participant: any }) {
-  const micOn = participant.isMicrophoneEnabled !== false;
-  const camOn = participant.isCameraEnabled;
-  const screenOn = participant.isScreenShareEnabled;
+function ParticipantAvatar({ participant, className, textSize, speaking }: { participant: any; className?: string; textSize?: string; speaking?: boolean }) {
+  let avatarUrl = "";
+  try {
+    const md = participant.metadata ? JSON.parse(participant.metadata) : null;
+    avatarUrl = md?.avatar_url || "";
+  } catch {}
+  const name = participant.name || participant.identity || "?";
   return (
-    <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur rounded-full px-2.5 py-1 text-[10px] text-white/80">
-      {micOn ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3 text-red-400" />}
-      {camOn && <Camera className="h-3 w-3" />}
-      {screenOn && <Monitor className="h-3 w-3" />}
-      <span className="truncate max-w-[100px]">{participant.name || participant.identity.slice(0, 8)}</span>
+    <div className={`rounded-full overflow-hidden shrink-0 grid place-items-center ${className || "h-14 w-14"} ${
+      speaking ? "ring-3 ring-emerald-500/50" : "ring-2 ring-border/30"
+    }`}>
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className={`h-full w-full bg-gradient-to-br from-primary/30 to-accent grid place-items-center font-bold text-foreground ${textSize || "text-lg"}`}>
+          {name[0]?.toUpperCase() || "?"}
+        </div>
+      )}
     </div>
   );
 }
 
-function initialName(p: any) {
-  const n = p.name || p.identity || "?";
-  return n[0]?.toUpperCase() || "?";
+function ParticipantBadge({ participant, hasCamera, hasScreen }: { participant: any; hasCamera: boolean; hasScreen: boolean }) {
+  return (
+    <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur rounded-full px-2.5 py-1 text-[10px] text-white/80">
+      {participant.isMicrophoneEnabled !== false ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3 text-red-400" />}
+      {hasCamera && <Camera className="h-3 w-3" />}
+      {hasScreen && <Monitor className="h-3 w-3" />}
+      <span className="truncate max-w-[100px]">{participant.name || participant.identity.slice(0, 6)}</span>
+    </div>
+  );
 }
