@@ -13,21 +13,36 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UsernameBadge } from "@/components/UsernameBadge";
 import { FriendButton } from "@/components/FriendButton";
 import {
-  ArrowLeft, Calendar, AtSign, MessageSquare, Activity,
+  ArrowLeft, AtSign, MessageSquare, Activity,
   Server, Medal, Star, Users, MapPin,
   Globe, Github, Shield, Sparkles, Clock, Zap,
-  Linkedin, ExternalLink, Trophy,
+  Linkedin, ExternalLink, Trophy, Twitter, Hash,
+  Camera, Music, Gamepad2, Youtube,
 } from "lucide-react";
 
 export const Route = createFileRoute("/app/u/$slug")({
   component: PublicProfile,
 });
 
-const STATUS_CFG: Record<string, { label: string; color: string; dot: string }> = {
-  online: { label: "Online", color: "bg-emerald-500", dot: "bg-emerald-500" },
-  idle: { label: "Ausente", color: "bg-yellow-500", dot: "bg-yellow-500" },
-  dnd: { label: "Ocupado", color: "bg-red-500", dot: "bg-red-500" },
-  offline: { label: "Offline", color: "bg-muted-foreground/30", dot: "bg-muted-foreground/30" },
+const STATUS_MAP: Record<string, { label: string; dot: string }> = {
+  online:  { label: "Online",  dot: "bg-emerald-500" },
+  idle:    { label: "Ausente", dot: "bg-yellow-500"  },
+  dnd:     { label: "Ocupado", dot: "bg-red-500"     },
+  offline: { label: "Offline", dot: "bg-muted-foreground/30" },
+};
+
+const SOCIAL_ICONS: Record<string, typeof Globe> = {
+  github: Github, twitter: Twitter, linkedin: Linkedin,
+  instagram: Globe, youtube: Youtube, tiktok: Globe,
+};
+
+const PLATFORM_COLORS: Record<string, string> = {
+  github: "hover:text-[#888]",
+  twitter: "hover:text-[#1DA1F2]",
+  linkedin: "hover:text-[#0A66C2]",
+  instagram: "hover:text-[#E4405F]",
+  youtube: "hover:text-[#FF0000]",
+  tiktok: "hover:text-[#00F2EA]",
 };
 
 function PublicProfile() {
@@ -85,7 +100,6 @@ function PublicProfile() {
       setFriendsCount(friendsRes.count ?? 0);
       setServerXp(xpRes.data ?? []);
 
-      // Servers (mutual if logged in)
       if (user) {
         const { data: mems } = await supabase.from("server_members").select("server_id").eq("user_id", uid);
         if (mems?.length && !cancelled) {
@@ -95,7 +109,6 @@ function PublicProfile() {
         }
       }
 
-      // Presence
       setStatusText(profile.status_text || "");
       const s = getSocket(uid);
       const onUsers = (users: { userId: string; status: string }[]) => {
@@ -111,34 +124,31 @@ function PublicProfile() {
     return () => { cancelled = true; };
   }, [slug, user?.id]);
 
-  // ---- 404 ----
+  // ── 404 ──
   if (notFound) {
     return (
-      <div className="max-w-3xl mx-auto p-8 flex flex-col items-center justify-center min-h-[60vh] text-center">
+      <div className="max-w-lg mx-auto p-8 flex flex-col items-center justify-center min-h-[60vh] text-center">
         <div className="h-20 w-20 rounded-full bg-muted grid place-items-center mb-4">
           <Users className="h-10 w-10 text-muted-foreground/40" />
         </div>
         <h2 className="text-xl font-bold mb-1">Usuário não encontrado</h2>
-        <p className="text-sm text-muted-foreground mb-6">Ninguém com o username ou ID &ldquo;{slug}&rdquo; foi encontrado.</p>
+        <p className="text-sm text-muted-foreground mb-6">Ninguém com &ldquo;{slug}&rdquo; foi encontrado.</p>
         <Link to=".."><Button variant="outline" className="gap-1.5"><ArrowLeft className="h-4 w-4" /> Voltar</Button></Link>
       </div>
     );
   }
 
-  // ---- Skeleton ----
+  // ── Skeleton ──
   if (!profile) {
     return (
-      <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-5 animate-pulse">
-        <div className="h-4 w-16 bg-muted rounded" />
-        <Card className="overflow-hidden border-0 shadow-lg">
-          <div className="h-40 md:h-48 bg-muted" />
-          <div className="px-5 md:px-8 pb-6 -mt-16 md:-mt-20">
-            <div className="flex flex-col md:flex-row items-start md:items-end gap-4 md:gap-6">
-              <div className="h-28 w-28 md:h-32 md:w-32 rounded-2xl bg-muted ring-4 ring-card" />
-              <div className="flex-1 pt-2 md:pb-2 w-full space-y-3">
-                <div className="h-6 w-48 bg-muted rounded" />
-                <div className="h-4 w-32 bg-muted rounded" />
-              </div>
+      <div className="max-w-lg mx-auto p-4 animate-pulse">
+        <Card className="overflow-hidden rounded-2xl border-0 bg-card/60">
+          <div className="h-28 bg-muted" />
+          <div className="px-5 pb-5 -mt-14">
+            <div className="h-20 w-20 rounded-full bg-muted ring-4 ring-card" />
+            <div className="mt-3 space-y-2">
+              <div className="h-5 w-36 bg-muted rounded" />
+              <div className="h-3 w-24 bg-muted rounded" />
             </div>
           </div>
         </Card>
@@ -146,168 +156,268 @@ function PublicProfile() {
     );
   }
 
-  const calcLevel = (xp: number) => Math.floor(Math.sqrt(xp / 10));
-  const st = STATUS_CFG[status] || STATUS_CFG.offline;
+  const st = STATUS_MAP[status] || STATUS_MAP.offline;
   const totalXp = serverXp.reduce((s, x) => s + x.xp, 0);
   const socialLinks = profile.social_links as Record<string, string> | null;
-  const socialIcon: Record<string, typeof Globe> = { github: Github, twitter: Globe, instagram: Globe, linkedin: Linkedin };
 
   return (
-    <div className="max-w-3xl mx-auto p-3 md:p-8 space-y-4 md:space-y-5">
-      <Link to=".." className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground w-fit transition-colors">
+    <div className="max-w-lg mx-auto p-3 md:p-6 space-y-3">
+      <Link to=".." className="inline-flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-foreground w-fit transition-colors mb-1">
         <ArrowLeft className="h-3.5 w-3.5" /> Voltar
       </Link>
 
-      {/* ─── Profile Card ─── */}
-      <Card className="overflow-hidden border-0 shadow-xl">
-        <div className="h-36 md:h-52 relative overflow-hidden bg-gradient-to-br from-indigo-600/60 via-violet-600/30 to-purple-900/40"
+      {/* ─── Discord Profile Card ─── */}
+      <Card className="overflow-hidden rounded-2xl border-0 bg-card/50 backdrop-blur shadow-2xl">
+        {/* Banner */}
+        <div className="h-24 md:h-28 relative overflow-hidden bg-gradient-to-r from-indigo-600/70 via-violet-600/40 to-purple-800/50"
           style={profile.banner_url ? { backgroundImage: `url(${profile.banner_url})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
           {!profile.banner_url && (
-            <div className="absolute inset-0 opacity-20">
-              <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-              <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
+            <div className="absolute inset-0">
+              <div className="absolute -top-8 -right-8 h-24 w-24 rounded-full bg-white/5 blur-2xl" />
+              <div className="absolute -bottom-6 -left-6 h-16 w-16 rounded-full bg-white/5 blur-2xl" />
             </div>
           )}
         </div>
 
-        <div className="px-4 md:px-8 pb-5 md:pb-7 -mt-16 md:-mt-24 relative z-10">
-          {/* Avatar + Name row */}
-          <div className="flex flex-col md:flex-row items-start md:items-end gap-3 md:gap-6">
-            <div className="relative">
-              <Avatar className="h-24 w-24 md:h-32 md:w-32 ring-4 ring-card shadow-2xl rounded-2xl md:rounded-3xl">
-                <AvatarImage src={profile.avatar_url ?? undefined} className="object-cover" />
-                <AvatarFallback className="text-2xl md:text-4xl font-bold bg-gradient-to-br from-primary to-violet-600 text-white">
-                  {profile.username?.[0]?.toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span className={`absolute -bottom-1 -right-1 h-5 w-5 rounded-full border-[3px] border-card ${st.dot}`} />
+        <div className="px-4 pb-4 -mt-12 relative z-10">
+          {/* Avatar (floating, left-aligned like Discord) */}
+          <div className="relative w-fit">
+            <Avatar className="h-20 w-20 ring-[4px] ring-card shadow-xl rounded-full">
+              <AvatarImage src={profile.avatar_url ?? undefined} className="object-cover" />
+              <AvatarFallback className="text-xl font-bold bg-gradient-to-br from-indigo-500 to-violet-600 text-white">
+                {profile.username?.[0]?.toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <span className={`absolute -bottom-0.5 -right-0.5 h-[18px] w-[18px] rounded-full border-[3px] border-card ${st.dot}`} />
+          </div>
+
+          {/* Name + @ */}
+          <div className="mt-2.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="text-lg font-bold flex items-center gap-1.5">
+                <UsernameBadge profile={profile} roles={roles} />
+                {profile.current_plan === "pro" && (
+                  <Sparkles className="h-4 w-4 text-amber-400 fill-amber-400/30" />
+                )}
+              </div>
+              {targetId && !isOwn && <FriendButton targetUserId={targetId} />}
             </div>
-
-            <div className="flex-1 pt-1 md:pb-2 w-full">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 flex-wrap">
-                <div className="text-xl md:text-3xl font-bold flex items-center gap-2 flex-wrap">
-                  <UsernameBadge profile={profile} roles={roles} />
-                  {profile.current_plan === "pro" && (
-                    <Badge variant="default" className="bg-gradient-to-r from-amber-500 to-orange-600 text-white border-0 gap-1 text-[10px] px-2 py-0.5">
-                      <Sparkles className="h-3 w-3" /> PRO
-                    </Badge>
-                  )}
-                </div>
-                {targetId && !isOwn && <FriendButton targetUserId={targetId} />}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-sm text-muted-foreground/80">
-                <span className="flex items-center gap-1"><AtSign className="h-3.5 w-3.5" />@{profile.username}</span>
-                <span className="hidden sm:inline text-muted-foreground/30">·</span>
-                <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />Membro desde {new Date(profile.created_at || Date.now()).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</span>
-                <span className="hidden sm:inline text-muted-foreground/30">·</span>
-                <span className={`flex items-center gap-1 ${status === "online" ? "text-emerald-500" : status === "idle" ? "text-yellow-500" : status === "dnd" ? "text-red-500" : "text-muted-foreground/50"}`}>
-                  <span className={`h-2 w-2 rounded-full ${st.dot}`} />
-                  {st.label}
-                </span>
-              </div>
+            <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground/60">
+              <span>@{profile.username}</span>
+              <span className="text-muted-foreground/20">·</span>
+              <span className={`flex items-center gap-1 ${
+                status === "online" ? "text-emerald-400" :
+                status === "idle" ? "text-yellow-400" :
+                status === "dnd" ? "text-red-400" : "text-muted-foreground/40"
+              }`}>
+                <span className={`h-2 w-2 rounded-full ${st.dot}`} />
+                {st.label}
+              </span>
             </div>
           </div>
 
-          {/* Status text */}
+          {/* Custom status */}
           {statusText && (
-            <div className="mt-2.5 flex items-center gap-2 text-sm text-muted-foreground/70 bg-accent/30 rounded-xl px-3.5 py-2 border border-border/40 w-fit max-w-full">
-              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-primary/60" />
-              <span className="truncate italic">&ldquo;{statusText}&rdquo;</span>
+            <div className="mt-2 text-sm text-muted-foreground/70 italic flex items-start gap-1.5 bg-accent/20 rounded-lg px-3 py-1.5 border border-border/30">
+              <MessageSquare className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground/40" />
+              <span>&ldquo;{statusText}&rdquo;</span>
             </div>
           )}
 
-          {/* Roles + Bio */}
-          <div className="flex flex-wrap gap-1.5 mt-3">
-            {roles.map((r) => (
-              <Badge key={r}
-                variant={r === "ceo" || r === "admin" ? "default" : "secondary"}
-                className={`text-[10px] uppercase tracking-wider gap-1 px-2.5 py-0.5 border-0 ${
-                  r === "ceo" ? "bg-gradient-to-r from-red-600 to-orange-500 text-white" :
-                  r === "admin" ? "bg-gradient-to-r from-blue-600 to-cyan-500 text-white" :
-                  "bg-accent/70 text-muted-foreground"
-                }`}>
-                {r === "ceo" ? <Medal className="h-3 w-3" /> : r === "admin" ? <Shield className="h-3 w-3" /> : null}
-                {r}
-              </Badge>
-            ))}
+          {/* Separator */}
+          <div className="my-3 border-t border-border/40" />
+
+          {/* Roles */}
+          {roles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {roles.map((r) => (
+                <Badge key={r}
+                  className={`text-[10px] font-semibold uppercase tracking-wider gap-1 px-2 py-0.5 border-0 rounded-md ${
+                    r === "ceo" ? "bg-gradient-to-r from-red-600/90 to-orange-500/90 text-white" :
+                    r === "admin" ? "bg-gradient-to-r from-blue-600/90 to-cyan-500/90 text-white" :
+                    "bg-accent/60 text-muted-foreground/80"
+                  }`}>
+                  {r === "ceo" ? <Medal className="h-3 w-3" /> : r === "admin" ? <Shield className="h-3 w-3" /> : <Hash className="h-3 w-3 opacity-50" />}
+                  {r}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {/* About Me */}
+          <div className="space-y-1">
+            <h4 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Sobre mim</h4>
+            {profile.bio ? (
+              <div className="text-sm prose prose-sm prose-invert max-w-none prose-p:my-0.5 prose-a:text-primary prose-img:rounded-md bg-accent/10 rounded-xl p-3 border border-border/30">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{profile.bio}</ReactMarkdown>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground/40 italic">Nada informado.</p>
+            )}
           </div>
-
-          {profile.bio && (
-            <div className="mt-3 prose prose-sm prose-invert max-w-none prose-p:my-0.5 prose-a:text-primary prose-img:rounded-lg bg-card/50 rounded-xl p-3.5 border border-border/50">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{profile.bio}</ReactMarkdown>
-            </div>
-          )}
 
           {/* Social links */}
           {socialLinks && Object.keys(socialLinks).length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {Object.entries(socialLinks).map(([platform, url]) => {
-                const Icon = socialIcon[platform] || Globe;
-                return (
-                  <a key={platform} href={typeof url === "string" && (url.startsWith("http://") || url.startsWith("https://")) ? url : `https://${platform}.com/${url}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs bg-accent/40 hover:bg-accent/70 text-muted-foreground hover:text-foreground rounded-full px-3 py-1.5 border border-border/50 transition-all">
-                    <Icon className="h-3.5 w-3.5" />
-                    {url}
-                  </a>
-                );
-              })}
+            <div className="mt-3 space-y-1">
+              <h4 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50">Links</h4>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(socialLinks).map(([platform, url]) => {
+                  const Icon = SOCIAL_ICONS[platform] || Globe;
+                  const hoverColor = PLATFORM_COLORS[platform] || "hover:text-foreground";
+                  const href = typeof url === "string" && (url.startsWith("http://") || url.startsWith("https://")) ? url : `https://${platform}.com/${url}`;
+                  return (
+                    <a key={platform} href={href} target="_blank" rel="noopener noreferrer"
+                      className={`inline-flex items-center gap-1.5 text-xs bg-accent/30 hover:bg-accent/60 text-muted-foreground/70 ${hoverColor} rounded-lg px-2.5 py-1.5 border border-border/40 transition-all`}>
+                      <Icon className="h-3.5 w-3.5" />
+                      {url}
+                    </a>
+                  );
+                })}
+              </div>
             </div>
           )}
+
+          {/* Info row */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/50">
+            <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />Entrou em {new Date(profile.created_at || Date.now()).toLocaleDateString("pt-BR", { month: "short", year: "numeric" })}</span>
+            <span className="text-muted-foreground/20">·</span>
+            <span className="flex items-center gap-1"><Star className="h-3 w-3" />{totalXp} XP</span>
+            <span className="text-muted-foreground/20">·</span>
+            <span className="flex items-center gap-1"><Users className="h-3 w-3" />{friendsCount} amigos</span>
+          </div>
         </div>
       </Card>
 
-      {/* ─── Stats Row ─── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
+      {/* ─── Mutual Servers (Discord-style icons) ─── */}
+      {servers.length > 0 && (
+        <Card className="rounded-2xl border-0 bg-card/40 backdrop-blur shadow-lg p-3.5">
+          <h4 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-2.5 flex items-center gap-1.5">
+            <Server className="h-3 w-3" />
+            Servidores em comum ({servers.length})
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {servers.slice(0, 12).map((s) => (
+              <Link key={s.id} to="/app/servers/$serverId" params={{ serverId: s.id }}
+                className="group relative" title={s.name}>
+                {s.icon_url ? (
+                  <img src={s.icon_url} alt={s.name}
+                    className="h-10 w-10 rounded-xl object-cover ring-1 ring-border/20 group-hover:ring-primary/40 transition-all" />
+                ) : (
+                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/30 to-primary/10 ring-1 ring-border/20 group-hover:ring-primary/40 grid place-items-center font-bold text-primary text-xs transition-all">
+                    {s.name[0]?.toUpperCase()}
+                  </div>
+                )}
+              </Link>
+            ))}
+            {servers.length > 12 && (
+              <div className="h-10 w-10 rounded-xl bg-accent/40 grid place-items-center text-xs font-bold text-muted-foreground/60">
+                +{servers.length - 12}
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* ─── Stats Grid ─── */}
+      <div className="grid grid-cols-4 gap-2">
         {[
-          { icon: MessageSquare, color: "from-primary/20 to-primary/5", iconColor: "text-primary", label: "Mensagens", value: stats?.messages_total ?? 0 },
-          { icon: Server, color: "from-emerald-500/20 to-emerald-500/5", iconColor: "text-emerald-500", label: "Servidores", value: stats?.servers_total ?? 0 },
-          { icon: Users, color: "from-amber-500/20 to-amber-500/5", iconColor: "text-amber-500", label: "Amigos", value: friendsCount },
-          { icon: Zap, color: "from-violet-500/20 to-violet-500/5", iconColor: "text-violet-500", label: "XP total", value: totalXp },
+          { label: "Mensagens", value: stats?.messages_total ?? 0, icon: MessageSquare, color: "text-primary" },
+          { label: "Servidores", value: stats?.servers_total ?? 0, icon: Server, color: "text-emerald-400" },
+          { label: "Amigos", value: friendsCount, icon: Users, color: "text-amber-400" },
+          { label: "XP", value: totalXp, icon: Zap, color: "text-violet-400" },
         ].map((item, i) => (
-          <Card key={i} className="p-3 md:p-4 flex items-center gap-3 md:gap-3.5 border-0 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 bg-gradient-to-br from-card to-accent/20">
-            <div className={`h-9 w-9 md:h-10 md:w-10 rounded-xl bg-gradient-to-br ${item.color} grid place-items-center shrink-0`}>
-              <item.icon className={`h-[18px] w-[18px] md:h-5 md:w-5 ${item.iconColor}`} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-lg md:text-xl font-bold tabular-nums leading-tight">{item.value.toLocaleString("pt-BR")}</p>
-              <p className="text-[10px] md:text-xs text-muted-foreground/70 leading-tight truncate">{item.label}</p>
-            </div>
+          <Card key={i} className="rounded-xl border-0 bg-card/30 backdrop-blur p-2.5 text-center hover:bg-card/50 transition-colors">
+            <item.icon className={`h-4 w-4 mx-auto mb-1 ${item.color}`} />
+            <p className="text-sm font-bold tabular-nums leading-tight">{item.value.toLocaleString("pt-BR")}</p>
+            <p className="text-[9px] text-muted-foreground/50 leading-tight truncate">{item.label}</p>
           </Card>
         ))}
       </div>
 
-      {/* ─── Tabs ─── */}
+      {/* ─── XP per Server (expandable) ─── */}
+      {serverXp.length > 0 && (
+        <Card className="rounded-2xl border-0 bg-card/40 backdrop-blur shadow-lg overflow-hidden">
+          <div className="p-3.5">
+            <h4 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50 flex items-center gap-1.5">
+              <Zap className="h-3 w-3 text-amber-400" />
+              XP por Servidor
+            </h4>
+          </div>
+          <div className="divide-y divide-border/20">
+            {serverXp.slice(0, 5).map((entry: any) => {
+              const sv = entry.servers;
+              const level = Math.floor(Math.sqrt(entry.xp / 10));
+              const nextXp = (level + 1) ** 2 * 10;
+              const progress = Math.min(entry.xp / nextXp, 1);
+              return (
+                <Link key={sv?.id || Math.random()} to={sv ? "/app/servers/$serverId" : "#"} params={sv ? { serverId: sv.id } : undefined as any}
+                  className={`flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-accent/20 transition-colors ${!sv ? "pointer-events-none" : ""}`}>
+                  {sv?.icon_url ? (
+                    <img src={sv.icon_url} alt="" className="h-8 w-8 rounded-lg object-cover shrink-0 ring-1 ring-border/10" />
+                  ) : (
+                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary/30 to-primary/10 ring-1 ring-border/10 grid place-items-center font-bold text-primary text-[10px] shrink-0">
+                      {sv?.name?.[0]?.toUpperCase() || "?"}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium truncate">{sv?.name || "—"}</p>
+                      <span className="text-[11px] font-mono text-muted-foreground/60 shrink-0">{entry.xp} XP</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 h-1 bg-accent/40 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all" style={{ width: `${progress * 100}%` }} />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground/50 shrink-0">Nv.{level}</span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+          {serverXp.length > 5 && (
+            <button onClick={() => setActiveTab("xp")}
+              className="w-full text-center text-[11px] text-muted-foreground/50 hover:text-foreground py-2.5 bg-accent/10 hover:bg-accent/20 transition-colors font-medium">
+              Ver todos os {serverXp.length} servidores
+            </button>
+          )}
+        </Card>
+      )}
+
+      {serverXp.length === 0 && (
+        <button onClick={() => {}} className="w-full text-center text-xs text-muted-foreground/50 py-4 italic">
+          Nenhum XP acumulado ainda
+        </button>
+      )}
+
+      {/* ─── About tab content (only visible when "about" tab is active on mobile) ─── */}
+      {/* Hidden on desktop since info is already in the card */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="w-full grid grid-cols-3 h-10 md:h-11 bg-accent/50 p-1">
-          <TabsTrigger value="about" className="gap-1.5 text-xs md:text-sm data-[state=active]:bg-background"><Activity className="h-3.5 w-3.5 md:h-4 md:w-4" /> Sobre</TabsTrigger>
-          <TabsTrigger value="servers" className="gap-1.5 text-xs md:text-sm data-[state=active]:bg-background"><Server className="h-3.5 w-3.5 md:h-4 md:w-4" /> Servidores</TabsTrigger>
-          <TabsTrigger value="xp" className="gap-1.5 text-xs md:text-sm data-[state=active]:bg-background"><Star className="h-3.5 w-3.5 md:h-4 md:w-4" /> XP</TabsTrigger>
+        <TabsList className="w-full grid grid-cols-3 h-9 bg-accent/50 p-0.5 rounded-xl md:hidden">
+          <TabsTrigger value="about" className="text-xs data-[state=active]:bg-background rounded-lg">Sobre</TabsTrigger>
+          <TabsTrigger value="servers" className="text-xs data-[state=active]:bg-background rounded-lg">Servidores</TabsTrigger>
+          <TabsTrigger value="xp" className="text-xs data-[state=active]:bg-background rounded-lg">XP</TabsTrigger>
         </TabsList>
 
-        {/* ─── About ─── */}
-        <TabsContent value="about" className="space-y-3 md:space-y-4 mt-3 md:mt-4">
-          <Card className="p-4 md:p-6 border-0 shadow-sm">
-            <h3 className="font-semibold flex items-center gap-2 mb-4 text-sm md:text-base">
-              <Activity className="h-4 w-4 text-primary" /> Atividade
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-sm">
+        <TabsContent value="about" className="mt-3 md:hidden">
+          <Card className="rounded-2xl border-0 bg-card/40 backdrop-blur shadow-lg p-3.5">
+            <h4 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-2.5 flex items-center gap-1.5">
+              <Activity className="h-3 w-3" /> Atividade
+            </h4>
+            <div className="grid grid-cols-2 gap-2">
               {[
-                { icon: MessageSquare, color: "bg-primary/10", iconColor: "text-primary", label: "Mensagens enviadas", value: stats?.messages_total ?? 0, suffix: "" },
-                { icon: Server, color: "bg-emerald-500/10", iconColor: "text-emerald-500", label: "Servidores que participa", value: profile.server_count ?? stats?.servers_total ?? 0, suffix: "" },
-                { icon: Star, color: "bg-amber-500/10", iconColor: "text-amber-500", label: "XP acumulado", value: totalXp, suffix: " XP" },
-                { icon: Users, color: "bg-violet-500/10", iconColor: "text-violet-500", label: "Amigos", value: friendsCount, suffix: "" },
-                { icon: Clock, color: "bg-blue-500/10", iconColor: "text-blue-500", label: "Membro há", value: profile.created_at ? Math.floor((Date.now() - new Date(profile.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0, suffix: " dias" },
-                { icon: MapPin, color: "bg-rose-500/10", iconColor: "text-rose-500", label: "Última atualização", value: profile.updated_at ? new Date(profile.updated_at).toLocaleDateString("pt-BR") : "—", suffix: "" },
+                { icon: MessageSquare, c: "bg-primary/10", label: "Mensagens", value: stats?.messages_total ?? 0 },
+                { icon: Server, c: "bg-emerald-500/10", label: "Servidores", value: stats?.servers_total ?? 0 },
+                { icon: Star, c: "bg-amber-500/10", label: "XP", value: totalXp, suffix: " XP" },
+                { icon: Clock, c: "bg-blue-500/10", label: "Membro há", value: profile.created_at ? Math.floor((Date.now() - new Date(profile.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0, suffix: "d" },
               ].map((item, i) => (
-                <div key={i} className="flex items-center gap-3 rounded-xl bg-accent/20 p-3 border border-border/30">
-                  <div className={`h-9 w-9 rounded-lg ${item.color} grid place-items-center shrink-0`}>
-                    <item.icon className={`h-4 w-4 ${item.iconColor}`} />
+                <div key={i} className="flex items-center gap-2.5 rounded-xl bg-accent/20 p-2.5 border border-border/20">
+                  <div className={`h-8 w-8 rounded-lg ${item.c} grid place-items-center shrink-0`}>
+                    <item.icon className="h-4 w-4 text-inherit" />
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground/70">{item.label}</p>
-                    <p className="font-semibold tabular-nums">{item.value}{item.suffix}</p>
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-muted-foreground/60">{item.label}</p>
+                    <p className="text-sm font-bold tabular-nums">{item.value}{(item as any).suffix || ""}</p>
                   </div>
                 </div>
               ))}
@@ -315,35 +425,24 @@ function PublicProfile() {
           </Card>
         </TabsContent>
 
-        {/* ─── Servers ─── */}
-        <TabsContent value="servers" className="space-y-3 md:space-y-4 mt-3 md:mt-4">
-          <Card className="p-4 md:p-6 border-0 shadow-sm">
-            <h3 className="font-semibold flex items-center gap-2 mb-4 text-sm md:text-base">
-              <Server className="h-4 w-4 text-primary" /> Servidores
-              {servers.length > 0 && <span className="text-xs font-normal text-muted-foreground/60">({servers.length})</span>}
-            </h3>
+        <TabsContent value="servers" className="mt-3 md:hidden">
+          <Card className="rounded-2xl border-0 bg-card/40 backdrop-blur shadow-lg p-3.5">
+            <h4 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-2.5 flex items-center gap-1.5">
+              <Server className="h-3 w-3" /> Servidores
+            </h4>
             {servers.length === 0 ? (
-              <div className="flex flex-col items-center py-8 text-muted-foreground/60">
-                <Server className="h-8 w-8 mb-2 opacity-40" />
-                <p className="text-sm font-medium">{isOwn ? "Você não entrou em nenhum servidor ainda." : "Nenhum servidor em comum."}</p>
-              </div>
+              <p className="text-xs text-muted-foreground/50 italic py-4 text-center">Nenhum servidor em comum.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5">
                 {servers.map((s) => (
                   <Link key={s.id} to="/app/servers/$serverId" params={{ serverId: s.id }}
-                    className="flex items-center gap-3 rounded-xl bg-accent/20 hover:bg-accent/50 p-3 border border-border/30 hover:border-border/60 transition-all group">
+                    className="flex items-center gap-2.5 rounded-lg bg-accent/20 hover:bg-accent/40 p-2 transition-colors group">
                     {s.icon_url ? (
-                      <img src={s.icon_url} alt="" className="h-10 w-10 rounded-xl object-cover ring-1 ring-border/30 group-hover:ring-primary/30 transition-all" />
+                      <img src={s.icon_url} alt="" className="h-8 w-8 rounded-lg object-cover shrink-0" />
                     ) : (
-                      <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/30 to-primary/10 ring-1 ring-border/30 grid place-items-center font-bold text-primary text-sm group-hover:ring-primary/30 transition-all">
-                        {s.name[0]?.toUpperCase()}
-                      </div>
+                      <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary/30 to-primary/10 grid place-items-center font-bold text-primary text-xs shrink-0">{s.name[0]?.toUpperCase()}</div>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm truncate group-hover:text-foreground transition-colors">{s.name}</p>
-                      <p className="text-xs text-muted-foreground/60">{s.privacy === "private" ? "Privado" : "Público"}</p>
-                    </div>
-                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors shrink-0" />
+                    <p className="text-xs font-medium truncate group-hover:text-foreground transition-colors">{s.name}</p>
                   </Link>
                 ))}
               </div>
@@ -351,52 +450,39 @@ function PublicProfile() {
           </Card>
         </TabsContent>
 
-        {/* ─── XP ─── */}
-        <TabsContent value="xp" className="space-y-3 md:space-y-4 mt-3 md:mt-4">
-          <Card className="p-4 md:p-6 border-0 shadow-sm">
-            <h3 className="font-semibold flex items-center gap-2 mb-4 text-sm md:text-base">
-              <Star className="h-4 w-4 text-amber-500" /> XP por Servidor
-              {serverXp.length > 0 && <span className="text-xs font-normal text-muted-foreground/60">({totalXp} total)</span>}
-            </h3>
+        <TabsContent value="xp" className="mt-3 md:hidden">
+          <Card className="rounded-2xl border-0 bg-card/40 backdrop-blur shadow-lg p-3.5">
+            <h4 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-2.5 flex items-center gap-1.5">
+              <Zap className="h-3 w-3 text-amber-400" /> XP por Servidor
+            </h4>
             {serverXp.length === 0 ? (
-              <div className="flex flex-col items-center py-8 text-muted-foreground/60">
-                <Trophy className="h-8 w-8 mb-2 opacity-40" />
-                <p className="text-sm font-medium">Nenhum XP acumulado ainda.</p>
-                <p className="text-xs text-muted-foreground/50 mt-1">Participe de servidores para ganhar XP!</p>
-              </div>
+              <p className="text-xs text-muted-foreground/50 italic py-4 text-center">Nenhum XP acumulado ainda.</p>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-1.5">
                 {serverXp.map((entry: any) => {
                   const sv = entry.servers;
-                  const level = calcLevel(entry.xp);
+                  const level = Math.floor(Math.sqrt(entry.xp / 10));
                   const nextXp = (level + 1) ** 2 * 10;
                   const progress = Math.min(entry.xp / nextXp, 1);
                   return (
                     <Link key={sv?.id || Math.random()} to={sv ? "/app/servers/$serverId" : "#"} params={sv ? { serverId: sv.id } : undefined as any}
-                      className={`flex items-center gap-3 p-2.5 md:p-3 rounded-xl hover:bg-accent/30 transition-all group border border-transparent hover:border-border/30 ${!sv ? "pointer-events-none" : ""}`}>
+                      className={`flex items-center gap-2.5 rounded-lg hover:bg-accent/20 p-2 transition-colors ${!sv ? "pointer-events-none" : ""}`}>
                       {sv?.icon_url ? (
-                        <img src={sv.icon_url} alt="" className="h-10 w-10 md:h-12 md:w-12 rounded-xl object-cover ring-1 ring-border/20 group-hover:ring-primary/30 transition-all" />
+                        <img src={sv.icon_url} alt="" className="h-8 w-8 rounded-lg object-cover shrink-0" />
                       ) : (
-                        <div className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-gradient-to-br from-primary/30 to-primary/10 ring-1 ring-border/20 grid place-items-center font-bold text-primary text-base md:text-lg">
-                          {sv?.name?.[0]?.toUpperCase() || "?"}
-                        </div>
+                        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary/30 to-primary/10 grid place-items-center font-bold text-primary text-xs shrink-0">{sv?.name?.[0]?.toUpperCase() || "?"}</div>
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="font-medium text-sm truncate">{sv?.name || "Servidor desconhecido"}</p>
-                          <span className="text-xs font-mono font-semibold text-muted-foreground/70">{entry.xp} XP</span>
+                          <p className="text-xs font-medium truncate">{sv?.name || "—"}</p>
+                          <span className="text-[10px] font-mono text-muted-foreground/50">{entry.xp} XP</span>
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="flex items-center gap-1.5 bg-primary/10 rounded-full px-2 py-0.5">
-                            <Zap className="h-3 w-3 text-amber-500" />
-                            <span className="text-[11px] font-bold tabular-nums text-amber-500">Nível {level}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="flex-1 h-1 bg-accent/40 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full" style={{ width: `${progress * 100}%` }} />
                           </div>
+                          <span className="text-[10px] text-muted-foreground/50">Lv.{level}</span>
                         </div>
-                        <div className="h-1.5 bg-accent/50 rounded-full mt-2 overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-500"
-                            style={{ width: `${progress * 100}%` }} />
-                        </div>
-                        <p className="text-[10px] text-muted-foreground/50 mt-0.5">{entry.xp} / {nextXp} XP para o nível {level + 1}</p>
                       </div>
                     </Link>
                   );
