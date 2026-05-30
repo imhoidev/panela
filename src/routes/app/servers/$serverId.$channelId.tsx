@@ -55,7 +55,6 @@ function ChannelView() {
   const [uploading, setUploading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -213,13 +212,6 @@ function ChannelView() {
   function insertSticker(url: string) { setText((prev) => prev + ` ![sticker](${url}) `); }
 
   const ctx = useServerContext();
-  useEffect(() => {
-    if (!lightboxUrl) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setLightboxUrl(null); };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [lightboxUrl]);
-
   if (!channel) return <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-8">Carregando canal…</div>;
 
   const isVoice = channel.type === "voice";
@@ -342,7 +334,7 @@ function ChannelView() {
                   setEditing={setEditing} saveEdit={saveEdit}
                   react={react} setReplyTo={setReplyTo} removeMsg={removeMsg}
                   user={user} serverId={serverId} navigate={navigate}
-                  channelId={channelId} setLightboxUrl={setLightboxUrl}
+                  channelId={channelId}
                 />
               );
             })}
@@ -413,19 +405,6 @@ function ChannelView() {
           </form>
         </>
       )}
-
-      {/* Lightbox */}
-      {lightboxUrl && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
-          onClick={() => setLightboxUrl(null)}>
-          <button onClick={() => setLightboxUrl(null)}
-            className="absolute top-4 right-4 h-10 w-10 rounded-full bg-black/50 text-white/80 hover:text-white grid place-items-center z-10">
-            <X className="h-5 w-5" />
-          </button>
-          <img src={lightboxUrl} alt="" className="max-h-full max-w-full object-contain rounded-lg shadow-2xl"
-            onClick={(e) => e.stopPropagation()} />
-        </div>
-      )}
     </div>
   );
 }
@@ -433,7 +412,7 @@ function ChannelView() {
 /* ─── Message Bubble ─── */
 function MessageBubble({
   m, sameAuthor, replied, myRx, editing, editText, setEditText,
-  setEditing, saveEdit, react, setReplyTo, removeMsg, user, serverId, navigate, channelId, setLightboxUrl,
+  setEditing, saveEdit, react, setReplyTo, removeMsg, user, serverId, navigate, channelId,
 }: any) {
   return (
     <div className={`group relative flex gap-2.5 px-2 py-1 rounded-lg hover:bg-accent/15 transition-colors ${sameAuthor ? "pl-[3.25rem]" : ""}`}>
@@ -480,8 +459,7 @@ function MessageBubble({
               <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"
                 className="mt-1.5 inline-flex items-center gap-2.5 rounded-lg border border-border/60 bg-accent/20 px-3 py-2 text-sm hover:bg-accent/40 transition-colors">
                 {m.attachment_type?.startsWith("image/") ? (
-                  <img src={m.attachment_url} alt="attachment" className="max-h-48 rounded object-contain cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setLightboxUrl?.(m.attachment_url); }} />
+                  <img src={m.attachment_url} alt="attachment" className="max-h-48 rounded object-contain" />
                 ) : m.attachment_type?.startsWith("video/") ? (
                   <video src={m.attachment_url} controls className="max-h-48 rounded" />
                 ) : m.attachment_type?.startsWith("audio/") ? (
