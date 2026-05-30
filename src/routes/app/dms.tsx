@@ -1,12 +1,12 @@
 import { createFileRoute, Outlet, Link, useLocation } from "@tanstack/react-router";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { Menu, MessageSquare, Search, ArrowLeft } from "lucide-react";
+import { Menu, MessageSquare, Search, ArrowLeft, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/app/dms")({
   component: DMLayout,
@@ -20,9 +20,11 @@ function DMLayout() {
   const [myParts, setMyParts] = useState<Map<string, string>>(new Map());
   const [openSheet, setOpenSheet] = useState(false);
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  async function loadDMs() {
+  async function loadDMs(showLoader = true) {
     if (!user) return;
+    if (showLoader) setLoading(true);
     const { data } = await supabase
       .from("dm_conversations")
       .select("*, dm_participants!inner(*)")
@@ -44,27 +46,62 @@ function DMLayout() {
       const m = new Map(profs?.map((p: any) => [p.id, p]) ?? []);
       setProfiles(m);
     }
+    if (showLoader) setLoading(false);
   }
 
   useEffect(() => { loadDMs(); }, [user?.id]);
 
-  // Targeted realtime: only update the affected conversation, no DB query
+  // Refresh when navigating to DM root (catches convos created externally)
+  useEffect(() => {
+    if (loc.pathname === "/app/dms") loadDMs(false);
+  }, [loc.pathname]);
+
+  async function fetchNewConversation(convId: string) {
+    if (!user) return;
+    const { data: conv } = await supabase
+      .from("dm_conversations")
+      .select("*, dm_participants!inner(*)")
+      .eq("id", convId)
+      .single();
+    if (!conv) return;
+    const newConv = {
+      ...conv,
+      other: conv.dm_participants?.find((p: any) => p.user_id !== user.id),
+      myPart: conv.dm_participants?.find((p: any) => p.user_id === user.id),
+    };
+    const otherId = newConv.other?.user_id;
+    if (otherId) {
+      const { data: prof } = await supabase.from("profiles")
+        .select("id,username,display_name,avatar_url").eq("id", otherId).maybeSingle();
+      if (prof) setProfiles((prev) => new Map(prev).set(prof.id, prof));
+    }
+    setConversations((prev) => {
+      if (prev.some((c) => c.id === convId)) return prev;
+      return [...prev, newConv].sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
+    });
+    if (newConv.myPart?.last_read_at) setMyParts((prev) => new Map(prev).set(convId, newConv.myPart.last_read_at));
+  }
+
+  // Targeted realtime + fetch new conversations
   useEffect(() => {
     if (!user) return;
     const ch = supabase.channel("dm-list")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "dm_messages" },
-        async (payload: any) => {
+        (payload: any) => {
           const msg = payload.new;
           setConversations((prev) => {
             const exists = prev.some((c) => c.id === msg.conversation_id);
-            if (!exists) return prev;
-            const updated = prev.map((c) =>
-              c.id === msg.conversation_id
-                ? { ...c, last_message_preview: msg.content?.slice(0, 120) || "📎 Arquivo", last_message_at: msg.created_at }
-                : c
-            );
-            return updated.sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
+            if (exists) {
+              const updated = prev.map((c) =>
+                c.id === msg.conversation_id
+                  ? { ...c, last_message_preview: msg.content?.slice(0, 120) || "📎 Arquivo", last_message_at: msg.created_at }
+                  : c
+              );
+              return updated.sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
+            }
+            return prev;
           });
+          fetchNewConversation(msg.conversation_id);
         })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -142,11 +179,13 @@ function DMLayout() {
             </Link>
           );
         })}
-        {filtered.length === 0 && (
+        {loading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground/40" /></div>
+        ) : filtered.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-8">
             {search ? "Nenhuma conversa encontrada" : "Nenhuma conversa ainda"}
           </p>
-        )}
+        ) : null}
       </div>
     </div>
   );
