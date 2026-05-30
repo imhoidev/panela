@@ -298,6 +298,8 @@ function DMChat() {
 
   async function removeMsg(m: DM) {
     if (!confirm("Apagar?")) return;
+    knownIds.current.delete(m.id);
+    setMessages((prev) => prev.filter((x) => x.id !== m.id));
     await supabase.from("dm_messages").delete().eq("id", m.id);
   }
 

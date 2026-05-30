@@ -286,7 +286,12 @@ function ChannelView() {
     else { await supabase.from("message_reactions").insert({ message_id: msg.id, emoji, user_id: user.id }); }
   }
 
-  async function removeMsg(m: Msg) { if (!confirm("Apagar essa mensagem?")) return; await supabase.from("messages").delete().eq("id", m.id); }
+  async function removeMsg(m: Msg) {
+    if (!confirm("Apagar essa mensagem?")) return;
+    knownIds.current.delete(m.id);
+    setMessages((prev) => prev.filter((x) => x.id !== m.id));
+    await supabase.from("messages").delete().eq("id", m.id);
+  }
 
   async function saveEdit() { if (!editing) return; const c = editText.trim(); if (!c) return; await supabase.from("messages").update({ content: c, edited_at: new Date().toISOString() }).eq("id", editing.id); setEditing(null); }
 
