@@ -220,6 +220,7 @@ function ServerLayout() {
 
   const onlineCount = Array.from(presence.values()).filter((s) => s !== "offline").length;
   const inChannel = loc.pathname.match(/^\/app\/servers\/[^/]+\/[^/]+$/);
+  const currentChannelId = inChannel ? loc.pathname.split("/").pop()! : "";
 
   return (
     <div className="flex h-full min-h-0">
@@ -287,14 +288,53 @@ function ServerLayout() {
           </div>
         )}
 
-        {/* Mobile channel sheet trigger — floating action button */}
+        {/* Mobile channel sheet */}
         {inChannel && (
-          <div className="md:hidden fixed bottom-20 right-4 z-30">
-            <Button size="icon" className="h-12 w-12 rounded-full shadow-xl shadow-black/30 bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => ctx.setMobileChannelsOpen(true)} title="Mudar de canal">
-              <Menu className="h-5 w-5" />
-            </Button>
-          </div>
+          <>
+            <div className="md:hidden fixed bottom-20 right-4 z-30">
+              <Button size="icon" className="h-12 w-12 rounded-full shadow-xl shadow-black/30 bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={() => setMobileChannelsOpen(true)} title="Mudar de canal">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </div>
+            <Sheet open={mobileChannelsOpen} onOpenChange={setMobileChannelsOpen}>
+              <SheetContent side="left" className="p-0 w-[85vw] max-w-[320px] bg-sidebar flex flex-col z-50">
+                <div className="p-3 border-b border-sidebar-border flex items-center gap-2.5">
+                  {server.icon_url ? (
+                    <img src={server.icon_url} alt="" className="h-9 w-9 rounded-xl object-cover" />
+                  ) : (
+                    <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary/40 to-primary/10 grid place-items-center font-bold text-primary text-sm">
+                      {server.name[0]?.toUpperCase() || "S"}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-semibold truncate text-sm">{server.name}</h2>
+                    <p className="text-[10px] text-muted-foreground/60">{channels.length} canais</p>
+                  </div>
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="p-2 space-y-0.5">
+                    {uncategorized.map((c: any) => (
+                      <MobileChannelLink key={c.id} c={c} serverId={serverId} currentId={currentChannelId} />
+                    ))}
+                    {[...categories.entries()].map(([cat, chs]) => (
+                      <div key={cat}>
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground/50 font-semibold px-2.5 py-1.5">{cat}</p>
+                        {chs.map((c: any) => (
+                          <MobileChannelLink key={c.id} c={c} serverId={serverId} currentId={currentChannelId} />
+                        ))}
+                      </div>
+                    ))}
+                    {channels.length === 0 && (
+                      <div className="p-6 text-center text-xs text-muted-foreground/50 italic">
+                        Nenhum canal disponível ainda
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </SheetContent>
+            </Sheet>
+          </>
         )}
 
         <ServerCtx_.Provider value={ctx}>
@@ -783,5 +823,24 @@ function ServerSettingsPanel({
         </TabsContent>
       </div>
     </Tabs>
+  );
+}
+
+function MobileChannelLink({ c, serverId, currentId }: { c: any; serverId: string; currentId: string }) {
+  const active = currentId === c.id;
+  const Icon = c.type === "voice" ? Volume2 : c.type === "announcement" ? MessageSquare : Hash;
+  return (
+    <Link
+      to="/app/servers/$serverId/$channelId"
+      params={{ serverId, channelId: c.id }}
+      className={`flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-all ${
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+          : "text-muted-foreground/80 hover:bg-sidebar-accent/50 hover:text-foreground"
+      }`}
+    >
+      <Icon className={`h-4 w-4 shrink-0 ${c.type === "voice" ? "text-emerald-500" : c.type === "announcement" ? "text-amber-500" : "text-primary/70"}`} />
+      <span className="truncate">{c.name}</span>
+    </Link>
   );
 }
