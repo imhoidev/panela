@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { CalendarDays, Plus, Trash2, Calendar } from "lucide-react";
 
 type Event = {
-  id: string; title: string; description: string | null; event_date: string;
+  id: string; title: string; description: string | null; starts_at: string;
   created_by: string; rsvp_count?: number;
 };
 
@@ -21,7 +21,7 @@ export function ServerEventsDialog({ serverId, canManage }: { serverId: string; 
   const [newDate, setNewDate] = useState("");
 
   function load() {
-    supabase.from("server_events").select("*").eq("server_id", serverId).order("event_date", { ascending: true }).then(({ data }) => {
+    supabase.from("server_events").select("*").eq("server_id", serverId).order("starts_at", { ascending: true }).then(({ data }) => {
       setEvents((data ?? []) as Event[]);
     });
   }
@@ -30,7 +30,7 @@ export function ServerEventsDialog({ serverId, canManage }: { serverId: string; 
   async function create() {
     if (!newTitle.trim() || !newDate) return;
     const { error } = await supabase.from("server_events").insert({
-      server_id: serverId, title: newTitle.trim(), description: newDesc.trim() || null, event_date: newDate,
+      server_id: serverId, title: newTitle.trim(), description: newDesc.trim() || null, starts_at: newDate,
     });
     if (error) return toast.error(error.message);
     setNewTitle(""); setNewDesc(""); setNewDate("");
@@ -63,7 +63,7 @@ export function ServerEventsDialog({ serverId, canManage }: { serverId: string; 
               <div>
                 <p className="font-medium text-sm">{ev.title}</p>
                 <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                  <Calendar className="h-3 w-3" /> {new Date(ev.event_date).toLocaleString("pt-BR")}
+                  <Calendar className="h-3 w-3" /> {new Date(ev.starts_at).toLocaleString("pt-BR")}
                 </p>
                 {ev.description && <p className="text-xs text-muted-foreground mt-1">{ev.description}</p>}
               </div>
