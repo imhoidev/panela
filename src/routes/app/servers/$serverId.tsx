@@ -76,7 +76,6 @@ function ServerLayout() {
   const [presence, setPresence] = useState<Map<string, string>>(new Map());
   const [members, setMembers] = useState<any[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
-  const [memberSort, setMemberSort] = useState("level");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -533,6 +532,7 @@ function ServerSettingsPanel({
   const [saving, setSaving] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [memberSort, setMemberSort] = useState("level");
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
