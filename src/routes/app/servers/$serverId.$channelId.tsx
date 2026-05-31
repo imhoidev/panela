@@ -21,6 +21,7 @@ import { useServerContext } from "./$serverId";
 import {
   Hash, SendHorizontal, Smile, CornerUpLeft, X, Trash2, Pencil, Check, Volume2, ArrowLeft,
   Paperclip, MessageSquare, Users, CircleIcon, AtSign, Menu, ArrowDown,
+  ScrollText, MessageSquareText, Shield,
 } from "lucide-react";
 
 const EMOJIS = ["👍", "❤️", "🔥", "😂", "🥹", "🤝", "👀", "🎉", "💯", "🍳"];
@@ -318,7 +319,22 @@ function ChannelView() {
   if (!channel) return <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-8">Carregando canal…</div>;
 
   const isVoice = channel.type === "voice";
+  const isRules = channel.type === "rules";
+  const isAnnouncement = channel.type === "announcement";
+  const isForum = channel.type === "forum";
+  const canPost = ctx?.canManage || ctx?.memberLevel >= 60 || (!isRules && !isAnnouncement);
   const onlineCount = Array.from(presence.values()).filter((s) => s !== "offline").length;
+
+  function channelMeta(type: string) {
+    switch (type) {
+      case "voice": return { icon: Volume2, color: "text-emerald-500", label: "Canal de voz" };
+      case "announcement": return { icon: MessageSquare, color: "text-amber-500", label: "Anuncios" };
+      case "rules": return { icon: ScrollText, color: "text-rose-500", label: "Regras" };
+      case "forum": return { icon: MessageSquareText, color: "text-violet-500", label: "Forum" };
+      default: return { icon: Hash, color: "text-primary/70", label: "Canal de texto" };
+    }
+  }
+  const { icon: ChanIcon, color: chanColor, label: chanLabel } = channelMeta(channel.type);
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-transparent to-card/10 relative">
@@ -329,12 +345,22 @@ function ChannelView() {
             <Menu className="h-4 w-4" />
           </Button>
         </div>
-        <div className={`h-7 w-7 rounded-lg grid place-items-center shrink-0 ${isVoice ? "bg-emerald-500/15" : "bg-primary/10"}`}>
-          {isVoice ? <Volume2 className="h-4 w-4 text-emerald-500" /> : <Hash className="h-4 w-4 text-primary" />}
+        <div className={`h-7 w-7 rounded-lg grid place-items-center shrink-0 ${isVoice ? "bg-emerald-500/15" : isRules ? "bg-rose-500/15" : isForum ? "bg-violet-500/15" : "bg-primary/10"}`}>
+          <ChanIcon className={`h-4 w-4 ${chanColor}`} />
         </div>
         <div className="min-w-0 flex-1 md:flex-initial">
-          <h2 className="font-semibold text-sm truncate">{channel.name}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-sm truncate">{channel.name}</h2>
+            {isAnnouncement && <span className="text-[10px] font-medium text-amber-500/80 uppercase tracking-wider shrink-0 bg-amber-500/10 px-1.5 py-0.5 rounded">Anuncio</span>}
+            {isRules && <span className="text-[10px] font-medium text-rose-500/80 uppercase tracking-wider shrink-0 bg-rose-500/10 px-1.5 py-0.5 rounded">Regras</span>}
+            {isForum && <span className="text-[10px] font-medium text-violet-500/80 uppercase tracking-wider shrink-0 bg-violet-500/10 px-1.5 py-0.5 rounded">Forum</span>}
+          </div>
           <p className="text-[10px] text-muted-foreground/50 md:hidden truncate -mt-px">{ctx?.server?.name}</p>
+          {channel.topic && (
+            <p className="hidden md:flex items-center gap-1 text-xs text-muted-foreground/70 truncate max-w-md -mt-px">
+              <AtSign className="h-3 w-3 shrink-0" />{channel.topic}
+            </p>
+          )}
         </div>
         {channel.topic && (
           <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground/70 border-l border-border/60 pl-3 ml-1 truncate max-w-[200px]">
@@ -377,17 +403,83 @@ function ChannelView() {
               </div>
             )}
 
-            {messages.length === 0 && !loadingMore && (
+            {messages.length === 0 && !loadingMore && !isRules && !isForum && (
               <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground px-6 py-16">
                 <div className="h-16 w-16 rounded-2xl bg-primary/10 grid place-items-center mb-4">
-                  <Hash className="h-8 w-8 text-primary/60" />
+                  <ChanIcon className={`h-8 w-8 ${chanColor}/60`} />
                 </div>
                 <p className="font-semibold text-foreground/80">Bem-vindo a <span className="text-primary">#{channel.name}</span></p>
-                <p className="text-sm mt-1">Esse é o começo do canal. Mande a primeira mensagem!</p>
+                <p className="text-sm mt-1">{isAnnouncement ? "Anuncios importantes serao publicados aqui." : "Esse e o comeco do canal. Mande a primeira mensagem!"}</p>
               </div>
             )}
 
-            {messages.map((m, i) => {
+            {isRules && (
+              <div className="px-4 py-6 space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-border/40">
+                  <ScrollText className="h-8 w-8 text-rose-500" />
+                  <div>
+                    <h2 className="font-semibold text-lg">Regras do servidor</h2>
+                    <p className="text-xs text-muted-foreground/60">{ctx?.server?.name || "Servidor"}</p>
+                  </div>
+                </div>
+                {channel.description ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground/90">
+                    {channel.description}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground/50 italic">Nenhuma regra definida ainda.</p>
+                )}
+                {messages.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-2 pt-2">
+                      <div className="flex-1 h-px bg-border/40" />
+                      <span className="text-[11px] font-medium text-muted-foreground/50 uppercase tracking-wider">Discussoes</span>
+                      <div className="flex-1 h-px bg-border/40" />
+                    </div>
+                    <p className="text-xs text-muted-foreground/50">Conversas sobre as regras aparecem abaixo.</p>
+                  </>
+                )}
+              </div>
+            )}
+
+            {isForum && messages.length === 0 && !loadingMore && (
+              <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground px-6 py-16">
+                <MessageSquareText className="h-10 w-10 text-violet-500/50 mb-3" />
+                <p className="font-semibold text-foreground/80">Forum #{channel.name}</p>
+                <p className="text-sm mt-1">Crie uma thread para iniciar uma discussao.</p>
+              </div>
+            )}
+
+            {isForum && messages.length > 0 && (
+              <div className="px-4 py-3 space-y-1">
+                <div className="flex items-center gap-2 pb-2 border-b border-border/40 mb-2">
+                  <MessageSquareText className="h-5 w-5 text-violet-500" />
+                  <h2 className="font-semibold text-sm">Topicos do forum</h2>
+                  <span className="text-[11px] text-muted-foreground/50 ml-auto">{messages.filter((m) => !m.reply_to).length} topicos</span>
+                </div>
+                {messages.filter((m) => !m.reply_to).map((m) => (
+                  <div key={m.id} className="flex items-start gap-3 rounded-lg border border-border/60 p-3 hover:bg-accent/15 transition-colors cursor-pointer"
+                    onClick={() => navigate({ to: "/app/servers/$serverId/threads/$messageId", params: { serverId, channelId, messageId: m.id } })}>
+                    <div className="h-8 w-8 rounded-full bg-violet-500/10 grid place-items-center shrink-0">
+                      <MessageSquareText className="h-4 w-4 text-violet-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{m.content?.slice(0, 80)}{m.content && m.content.length > 80 ? "..." : ""}</p>
+                      <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                        {m.author?.display_name || m.author?.username || "Alguem"} &middot; {formatTime(m.created_at)}
+                      </p>
+                    </div>
+                    {m.thread_root && (
+                      <span className="text-[10px] text-muted-foreground/50 shrink-0">
+                        {messages.filter((r) => r.thread_root === m.id).length} respostas
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!isForum && messages.map((m, i) => {
               const prev = messages[i - 1];
               const showDateSep = !prev || new Date(m.created_at).toDateString() !== new Date(prev.created_at).toDateString();
               const sameAuthor = prev && prev.author_id === m.author_id && !m.reply_to && (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60_000);
@@ -436,58 +528,80 @@ function ChannelView() {
             </button>
           )}
 
-          <form onSubmit={send} className="px-2 sm:px-5 pb-2 sm:pb-3 pt-1 border-t border-border/50 bg-card/10 pb-[max(0.5rem,env(safe-area-inset-bottom))] shrink-0">
-            {replyTo && (
-              <div className="mb-1.5 text-xs flex items-center justify-between px-3 py-1.5 rounded-lg bg-accent/20 border border-border/60">
-                <span className="truncate flex items-center gap-1.5">
-                  <CornerUpLeft className="inline h-3 w-3 shrink-0 text-primary/60" />
-                  <span className="text-muted-foreground/70">respondendo</span>
-                  <span className="font-medium text-foreground/80">@{replyTo.author?.username ?? "alguém"}</span>
-                  <span className="text-muted-foreground/50 hidden sm:inline truncate">: {replyTo.content}</span>
-                </span>
-                <button type="button" onClick={() => setReplyTo(null)} className="p-1 hover:text-foreground text-muted-foreground/50 transition-colors">
-                  <X className="h-3.5 w-3.5" />
+          {isRules || isAnnouncement ? (
+            <div className="px-2 sm:px-5 pb-2 sm:pb-3 pt-1 border-t border-border/50 bg-card/10 shrink-0">
+              {canPost ? (
+                <form onSubmit={send}>
+                  <Input
+                    ref={inputRef}
+                    value={text}
+                    onChange={(e) => { setText(e.target.value); emitTyping(); }}
+                    placeholder={`Mensagem em #${channel.name}`}
+                    className="bg-card/80 backdrop-blur rounded-xl border border-border/70 h-10 px-3 text-sm placeholder:text-muted-foreground/40 focus-visible:border-primary/40"
+                    maxLength={2000}
+                  />
+                </form>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-card/50 border border-border/50 text-xs text-muted-foreground/60">
+                  <Shield className="h-4 w-4 shrink-0 text-muted-foreground/40" />
+                  <span>{isAnnouncement ? "Apenas moderadores podem publicar anuncios." : "Apenas moderadores podem comentar sobre as regras."}</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <form onSubmit={send} className="px-2 sm:px-5 pb-2 sm:pb-3 pt-1 border-t border-border/50 bg-card/10 pb-[max(0.5rem,env(safe-area-inset-bottom))] shrink-0">
+              {replyTo && (
+                <div className="mb-1.5 text-xs flex items-center justify-between px-3 py-1.5 rounded-lg bg-accent/20 border border-border/60">
+                  <span className="truncate flex items-center gap-1.5">
+                    <CornerUpLeft className="inline h-3 w-3 shrink-0 text-primary/60" />
+                    <span className="text-muted-foreground/70">respondendo</span>
+                    <span className="font-medium text-foreground/80">@{replyTo.author?.username ?? "alguem"}</span>
+                    <span className="text-muted-foreground/50 hidden sm:inline truncate">: {replyTo.content}</span>
+                  </span>
+                  <button type="button" onClick={() => setReplyTo(null)} className="p-1 hover:text-foreground text-muted-foreground/50 transition-colors">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center gap-1.5 bg-card/80 backdrop-blur rounded-xl border border-border/70 px-2 py-1.5 shadow-sm shadow-black/10 focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+                <input type="file" ref={fileRef} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }} />
+                <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()} className="text-muted-foreground/50 hover:text-foreground disabled:opacity-30 p-1.5 shrink-0 transition-colors" title="Anexar arquivo">
+                  <Paperclip className="h-5 w-5" />
+                </button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button type="button" className="text-muted-foreground/50 hover:text-foreground text-xs font-bold px-2 h-8 shrink-0 transition-colors">GIF</button>
+                  </PopoverTrigger>
+                  <PopoverContent side="top" className="w-auto p-2" align="start">
+                    <GifPicker onSelect={insertGif} />
+                  </PopoverContent>
+                </Popover>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button type="button" className="text-muted-foreground/50 hover:text-foreground p-1.5 shrink-0 transition-colors">
+                      <Smile className="h-5 w-5" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent side="top" className="w-auto p-2" align="start">
+                    <StickerPicker onSelect={insertSticker} serverId={serverId} />
+                  </PopoverContent>
+                </Popover>
+                <Input
+                  ref={inputRef}
+                  value={text}
+                  onChange={(e) => { setText(e.target.value); emitTyping(); }}
+                  placeholder={`Mensagem em #${channel.name}`}
+                  className="bg-transparent border-0 h-10 flex-1 min-w-0 px-1.5 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-muted-foreground/40"
+                  maxLength={2000}
+                />
+                <button type="submit" disabled={!text.trim() || sending}
+                  className="text-primary/60 hover:text-primary disabled:opacity-25 p-1.5 shrink-0 transition-colors disabled:cursor-not-allowed"
+                  title="Enviar">
+                  <SendHorizontal className="h-5 w-5" />
                 </button>
               </div>
-            )}
-            <div className="flex items-center gap-1.5 bg-card/80 backdrop-blur rounded-xl border border-border/70 px-2 py-1.5 shadow-sm shadow-black/10 focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
-              <input type="file" ref={fileRef} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }} />
-              <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()} className="text-muted-foreground/50 hover:text-foreground disabled:opacity-30 p-1.5 shrink-0 transition-colors" title="Anexar arquivo">
-                <Paperclip className="h-5 w-5" />
-              </button>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button type="button" className="text-muted-foreground/50 hover:text-foreground text-xs font-bold px-2 h-8 shrink-0 transition-colors">GIF</button>
-                </PopoverTrigger>
-                <PopoverContent side="top" className="w-auto p-2" align="start">
-                  <GifPicker onSelect={insertGif} />
-                </PopoverContent>
-              </Popover>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button type="button" className="text-muted-foreground/50 hover:text-foreground p-1.5 shrink-0 transition-colors">
-                    <Smile className="h-5 w-5" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent side="top" className="w-auto p-2" align="start">
-                  <StickerPicker onSelect={insertSticker} serverId={serverId} />
-                </PopoverContent>
-              </Popover>
-              <Input
-                ref={inputRef}
-                value={text}
-                onChange={(e) => { setText(e.target.value); emitTyping(); }}
-                placeholder={`Mensagem em #${channel.name}`}
-                className="bg-transparent border-0 h-10 flex-1 min-w-0 px-1.5 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm placeholder:text-muted-foreground/40"
-                maxLength={2000}
-              />
-              <button type="submit" disabled={!text.trim() || sending}
-                className="text-primary/60 hover:text-primary disabled:opacity-25 p-1.5 shrink-0 transition-colors disabled:cursor-not-allowed"
-                title="Enviar">
-                <SendHorizontal className="h-5 w-5" />
-              </button>
-            </div>
-          </form>
+            </form>
+          )}
         </>
       )}
     </div>

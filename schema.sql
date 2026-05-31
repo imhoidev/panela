@@ -158,6 +158,22 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.server_members TO authenticated;
 GRANT ALL ON public.server_members TO service_role;
 ALTER TABLE public.server_members ENABLE ROW LEVEL SECURITY;
 
+-- member_count maintenance
+CREATE OR REPLACE FUNCTION public.bump_member_count()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.servers SET member_count = member_count + 1 WHERE id = NEW.server_id;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE public.servers SET member_count = GREATEST(member_count - 1, 0) WHERE id = OLD.server_id;
+  END IF;
+  RETURN NULL;
+END; $$;
+
+DROP TRIGGER IF EXISTS server_members_count ON public.server_members;
+CREATE TRIGGER server_members_count AFTER INSERT OR DELETE ON public.server_members
+  FOR EACH ROW EXECUTE FUNCTION public.bump_member_count();
+
 -- helpers
 CREATE OR REPLACE FUNCTION public.is_server_member(_server UUID, _user UUID)
 RETURNS BOOLEAN LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public AS $$

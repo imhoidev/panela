@@ -25,7 +25,7 @@ import { StatusDot } from "@/components/PresenceStatus";
 import {
   Hash, Plus, Settings, LogOut, Volume2, Menu, Users, Copy, AtSign, Check, Shield,
   ChevronDown, Search, MessageSquare, X, Crown, UserMinus,
-  Edit3, Globe, Lock, ArrowLeft, Sticker,
+  Edit3, Globe, Lock, ArrowLeft, Sticker, ScrollText, MessageSquareText, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { slugify, isValidSlug } from "@/lib/slug";
@@ -49,7 +49,7 @@ type ServerCtx = {
   setOpen: (v: boolean) => void;
   newName: string;
   setNewName: (v: string) => void;
-  newType: "text" | "voice" | "announcement";
+  newType: string;
   setNewType: (v: any) => void;
   newCategory: string;
   setNewCategory: (v: string) => void;
@@ -71,7 +71,7 @@ function ServerLayout() {
   const [memberLevel, setMemberLevel] = useState(0);
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState<"text" | "voice" | "announcement">("text");
+  const [newType, setNewType] = useState("text");
   const [newCategory, setNewCategory] = useState("");
   const [mobileChannelsOpen, setMobileChannelsOpen] = useState(false);
   const [presence, setPresence] = useState<Map<string, string>>(new Map());
@@ -155,11 +155,20 @@ function ServerLayout() {
   }
 
   useEffect(() => { load(); }, [serverId, user?.id]);
-  useEffect(() => { if (settingsOpen) loadMembers(); }, [settingsOpen]);
+  useEffect(() => { if (settingsOpen) { loadMembers(); load(); } }, [settingsOpen]);
 
   useEffect(() => {
     const ch = supabase.channel(`server-${serverId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "channels", filter: `server_id=eq.${serverId}` }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [serverId]);
+
+  // Re-fetch server row when members join/leave (member_count updates)
+  useEffect(() => {
+    const ch = supabase.channel(`server-members-${serverId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "server_members", filter: `server_id=eq.${serverId}` },
+        () => { supabase.from("servers").select("*").eq("id", serverId).maybeSingle().then(({ data }) => { if (data) setServer(data); }); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [serverId]);
@@ -393,14 +402,16 @@ function ChannelsList({
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label>Tipo</Label>
-                  <Select value={newType} onValueChange={(v: any) => setNewType(v)}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="text">Texto</SelectItem>
-                      <SelectItem value="voice">Voz</SelectItem>
-                      <SelectItem value="announcement">Anúncios</SelectItem>
-                    </SelectContent>
-                  </Select>
+      <Select value={newType} onValueChange={(v: any) => setNewType(v)}>
+        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="text">Texto</SelectItem>
+          <SelectItem value="voice">Voz</SelectItem>
+          <SelectItem value="announcement">Anúncios</SelectItem>
+          <SelectItem value="rules">Regras</SelectItem>
+          <SelectItem value="forum">Forum</SelectItem>
+        </SelectContent>
+      </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Nome</Label>
@@ -447,11 +458,37 @@ function ChannelsList({
 }
 
 /* ─── Channel Item ─── */
+function channelMeta(type: string) {
+  switch (type) {
+    case "voice": return { icon: Volume2, color: "text-emerald-500" };
+    case "announcement": return { icon: MessageSquare, color: "text-amber-500" };
+    case "rules": return { icon: ScrollText, color: "text-rose-500" };
+    case "forum": return { icon: MessageSquareText, color: "text-violet-500" };
+    default: return { icon: Hash, color: "text-primary/70" };
+  }
+}
+
 function ChannelItem({ c, serverId, loc, canManage, deleteChannel }: any) {
-  const path = `/app/servers/${serverId}/${c.id}`;
-  const active = loc.pathname === path;
-  const Icon = c.type === "voice" ? Volume2 : c.type === "announcement" ? MessageSquare : Hash;
-  const iconColor = c.type === "voice" ? "text-emerald-500" : c.type === "announcement" ? "text-amber-500" : "text-primary/70";
+  const active = loc.pathname === `/app/servers/${serverId}/${c.id}`;
+  const { icon: Icon, color: iconColor } = channelMeta(c.type);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState(c.name);
+  const [editTopic, setEditTopic] = useState(c.topic ?? "");
+  const [editDesc, setEditDesc] = useState(c.description ?? "");
+  const [editMinLevel, setEditMinLevel] = useState(c.min_level ?? 1);
+
+  async function saveChannel() {
+    const { error } = await supabase.from("channels").update({
+      name: editName.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 32),
+      topic: editTopic.trim() || null,
+      description: editDesc.trim() || null,
+      min_level: editMinLevel,
+    }).eq("id", c.id);
+    if (error) return toast.error(error.message);
+    setEditOpen(false);
+    toast.success("Canal atualizado");
+  }
+
   return (
     <div className={`${active ? "relative " : ""}group`}>
       {active && (
@@ -470,14 +507,51 @@ function ChannelItem({ c, serverId, loc, canManage, deleteChannel }: any) {
         <span className="truncate text-[13px]">{c.name}</span>
       </Link>
       {canManage && (
-        <button
-          onClick={() => deleteChannel(c.id)}
-          className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 text-muted-foreground/40 hover:text-destructive shrink-0 transition-all hover:scale-110"
-          title="Deletar canal"
-        >
-          <X className="h-3 w-3" />
-        </button>
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+          <button onClick={() => { setEditName(c.name); setEditTopic(c.topic ?? ""); setEditDesc(c.description ?? ""); setEditMinLevel(c.min_level ?? 1); setEditOpen(true); }}
+            className="p-1 text-muted-foreground/40 hover:text-foreground transition-colors" title="Editar canal">
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button onClick={() => deleteChannel(c.id)}
+            className="p-1 text-muted-foreground/40 hover:text-destructive transition-colors" title="Deletar canal">
+            <X className="h-3 w-3" />
+          </button>
+        </div>
       )}
+      <ResponsiveDialog open={editOpen} onOpenChange={setEditOpen} title="Editar canal" className="max-w-md">
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Nome</Label>
+            <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-10" maxLength={32} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Topico (exibido no header do canal)</Label>
+            <Input value={editTopic} onChange={(e) => setEditTopic(e.target.value)} className="h-10" maxLength={128} placeholder="Assunto do canal..." />
+          </div>
+          {c.type === "rules" && (
+            <div className="space-y-1.5">
+              <Label>Regras (descricao em destaque)</Label>
+              <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none min-h-[100px]" maxLength={2000} placeholder="Escreva as regras do servidor..." />
+            </div>
+          )}
+          {c.type === "text" && (
+            <div className="space-y-1.5">
+              <Label>Descricao</Label>
+              <Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} className="h-10" maxLength={300} placeholder="Descricao do canal..." />
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label>Nivel minimo para acessar</Label>
+            <div className="flex items-center gap-2">
+              <input type="range" min={1} max={99} value={editMinLevel} onChange={(e) => setEditMinLevel(Number(e.target.value))}
+                className="flex-1 accent-primary" />
+              <span className="text-sm font-mono text-muted-foreground w-8 text-center">{editMinLevel}</span>
+            </div>
+          </div>
+          <Button onClick={saveChannel} className="w-full h-10">Salvar</Button>
+        </div>
+      </ResponsiveDialog>
     </div>
   );
 }
@@ -917,7 +991,7 @@ function ServerSettingsPanel({
 
 function MobileChannelLink({ c, serverId, currentId }: { c: any; serverId: string; currentId: string }) {
   const active = currentId === c.id;
-  const Icon = c.type === "voice" ? Volume2 : c.type === "announcement" ? MessageSquare : Hash;
+  const { icon: Icon, color: iconColor } = channelMeta(c.type);
   return (
     <Link
       to="/app/servers/$serverId/$channelId"
@@ -928,7 +1002,7 @@ function MobileChannelLink({ c, serverId, currentId }: { c: any; serverId: strin
           : "text-muted-foreground/80 hover:bg-sidebar-accent/50 hover:text-foreground"
       }`}
     >
-      <Icon className={`h-4 w-4 shrink-0 ${c.type === "voice" ? "text-emerald-500" : c.type === "announcement" ? "text-amber-500" : "text-primary/70"}`} />
+      <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />
       <span className="truncate">{c.name}</span>
     </Link>
   );
