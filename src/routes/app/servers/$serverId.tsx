@@ -76,6 +76,7 @@ function ServerLayout() {
   const [presence, setPresence] = useState<Map<string, string>>(new Map());
   const [members, setMembers] = useState<any[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
+  const [memberSort, setMemberSort] = useState("level");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -95,11 +96,22 @@ function ServerLayout() {
 
   async function load() {
     if (!user) return;
-    const [{ data: s }, { data: ch }, { data: mem }] = await Promise.all([
+    let [{ data: s }, { data: ch }, { data: mem }] = await Promise.all([
       supabase.from("servers").select("*").eq("id", serverId).maybeSingle(),
       supabase.from("channels").select("*").eq("server_id", serverId).order("position"),
       supabase.from("server_members").select("level").eq("server_id", serverId).eq("user_id", user.id).maybeSingle(),
     ]);
+    // Auto-fix: if owner but not a member (trigger wasn't applied for existing servers)
+    if (s && !mem && s.owner_id === user.id) {
+      await supabase.from("server_members").insert({
+        server_id: serverId, user_id: user.id, level: 99,
+      });
+      mem = { level: 99 };
+      // Re-fetch channels now that we're a member
+      const { data: ch2 } = await supabase
+        .from("channels").select("*").eq("server_id", serverId).order("position");
+      ch = ch2;
+    }
     setServer(s); setChannels(ch ?? []); setMemberLevel(mem?.level ?? 0);
     if (s && ch && ch.length > 0 && loc.pathname === `/app/servers/${serverId}`) {
       const first = ch.find((c: any) => c.type === "text") ?? ch[0];
@@ -116,10 +128,21 @@ function ServerLayout() {
     const userIds = mems.map((m) => m.user_id);
     const { data: profs } = await supabase
       .from("profiles")
-      .select("id, username, display_name, avatar_url")
+      .select("id, username, display_name, avatar_url, name_color, name_colors, name_effect, current_plan, status_text")
       .in("id", userIds);
     const profMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p]));
-    setMembers(mems.map((m) => ({ ...m, profiles: profMap[m.user_id] || null })));
+    // Sort: owner first, then by level desc, then by name
+    const sorted = mems
+      .map((m) => ({ ...m, profiles: profMap[m.user_id] || null }))
+      .sort((a, b) => {
+        if (a.user_id === server?.owner_id) return -1;
+        if (b.user_id === server?.owner_id) return 1;
+        if (b.level !== a.level) return b.level - a.level;
+        const na = a.profiles?.display_name || a.profiles?.username || "";
+        const nb = b.profiles?.display_name || b.profiles?.username || "";
+        return na.localeCompare(nb);
+      });
+    setMembers(sorted);
   }
 
   useEffect(() => { load(); }, [serverId, user?.id]);
@@ -196,6 +219,7 @@ function ServerLayout() {
     open, setOpen, newName, setNewName, newType, setNewType, newCategory, setNewCategory,
   };
 
+  const onlineCount = Array.from(presence.values()).filter((s) => s !== "offline").length;
   const inChannel = loc.pathname.match(/^\/app\/servers\/[^/]+\/[^/]+$/);
 
   return (
@@ -215,7 +239,9 @@ function ServerLayout() {
             <div className="flex items-center gap-1.5 mt-px">
               <span className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
                 {server.privacy === "private" ? <Lock className="h-2.5 w-2.5" /> : <Globe className="h-2.5 w-2.5" />}
-                {server.member_count} membros
+                {server.member_count} {server.member_count === 1 ? "membro" : "membros"}
+                <span className="text-muted-foreground/30 mx-0.5">·</span>
+                {Array.from(presence.values()).filter((s) => s !== "offline").length} online
               </span>
               {server.slug && <span className="text-[10px] text-muted-foreground/40">· @{server.slug}</span>}
             </div>
@@ -254,7 +280,7 @@ function ServerLayout() {
             )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate leading-tight">{server.name}</p>
-              <p className="text-[10px] text-muted-foreground/60 leading-tight">{server.member_count} membros</p>
+              <p className="text-[10px] text-muted-foreground/60 leading-tight">{server.member_count} {server.member_count === 1 ? "membro" : "membros"}</p>
             </div>
             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSettingsOpen(true)} title="Configurações">
               <Settings className="h-4 w-4" />
@@ -563,7 +589,20 @@ function ServerSettingsPanel({
     router.navigate({ to: "/app/servers" });
   }
 
-  const filteredMembers = members.filter((m: any) => {
+  const sortedMembers = [...members].sort((a, b) => {
+    if (a.user_id === server?.owner_id) return -1;
+    if (b.user_id === server?.owner_id) return 1;
+    if (memberSort === "online") {
+      const aOn = presence.get(a.user_id) != null && presence.get(a.user_id) !== "offline";
+      const bOn = presence.get(b.user_id) != null && presence.get(b.user_id) !== "offline";
+      if (aOn !== bOn) return aOn ? -1 : 1;
+    }
+    if (memberSort === "level" || memberSort === "online") return (b.level ?? 0) - (a.level ?? 0);
+    const na = a.profiles?.display_name || a.profiles?.username || "";
+    const nb = b.profiles?.display_name || b.profiles?.username || "";
+    return na.localeCompare(nb);
+  });
+  const filteredMembers = sortedMembers.filter((m: any) => {
     if (!memberSearch) return true;
     const p = m.profiles;
     return p?.username?.toLowerCase().includes(memberSearch.toLowerCase()) ||
@@ -596,7 +635,7 @@ function ServerSettingsPanel({
           </div>
           <div className="min-w-0">
             <h3 className="font-semibold text-sm truncate">{server.name}</h3>
-            <p className="text-[11px] text-muted-foreground">{server.member_count} membros · {editPrivacy === "private" ? "Privado" : "Público"}</p>
+            <p className="text-[11px] text-muted-foreground">{server.member_count} {server.member_count === 1 ? "membro" : "membros"} · {editPrivacy === "private" ? "Privado" : "Público"}</p>
           </div>
         </div>
         <TabsList className="w-full grid grid-cols-3 h-9">
@@ -669,10 +708,18 @@ function ServerSettingsPanel({
         </TabsContent>
 
         <TabsContent value="members" className="mt-0 space-y-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)}
-              placeholder="Buscar membros..." className="pl-8 h-10 text-sm" />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder="Buscar membros..." className="pl-8 h-10 text-sm" />
+            </div>
+            <select value={memberSort} onChange={(e) => setMemberSort(e.target.value)}
+              className="h-10 rounded-lg border border-border bg-background px-2.5 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30">
+              <option value="level">Nível</option>
+              <option value="name">Nome</option>
+              <option value="online">Online</option>
+            </select>
           </div>
           {filteredMembers.length === 0 ? (
             <div className="flex flex-col items-center py-12 text-muted-foreground/60">
@@ -680,29 +727,44 @@ function ServerSettingsPanel({
               <p className="text-xs font-medium">{memberSearch ? "Ninguém encontrado" : "Nenhum membro"}</p>
             </div>
           ) : (
-            <ScrollArea className="h-[280px] -mx-1 px-1">
-              <div className="space-y-0.5">
+            <ScrollArea className="h-[300px] -mx-1 px-1">
+              <div className="space-y-1">
                 {filteredMembers.map((m: any) => {
                   const p = m.profiles;
                   const status = presence.get(m.user_id);
-                  const online = status != null;
+                  const online = status != null && status !== "offline";
                   return (
-                    <div key={m.user_id} className="flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-accent/30 transition-colors">
-                      <Avatar className="h-9 w-9 shrink-0 ring-1 ring-border/30">
-                        <AvatarImage src={p?.avatar_url ?? undefined} />
-                        <AvatarFallback className="text-[10px]">{p?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
-                      </Avatar>
+                    <div key={m.user_id} className="flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-accent/30 transition-colors group">
+                      <div className="relative shrink-0">
+                        <Avatar className="h-9 w-9 ring-1 ring-border/30">
+                          <AvatarImage src={p?.avatar_url ?? undefined} />
+                          <AvatarFallback className="text-[10px]">{p?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
+                        </Avatar>
+                        <span className={`absolute -bottom-0.5 -right-0.5 h-[10px] w-[10px] rounded-full border-2 border-card ${
+                          online ? (status === "idle" ? "bg-yellow-500" : status === "dnd" ? "bg-red-500" : "bg-emerald-500") : "bg-muted-foreground/30"
+                        }`} />
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className={`h-2 w-2 rounded-full shrink-0 ${online ? (status === "idle" ? "bg-yellow-500" : status === "dnd" ? "bg-red-500" : "bg-emerald-500") : "bg-muted-foreground/30"}`} />
                           <p className="text-sm font-medium truncate">{p?.display_name || p?.username}</p>
                           {m.user_id === server.owner_id && <Crown className="h-3 w-3 text-yellow-500 shrink-0" />}
+                          {m.level >= 80 && <Shield className="h-3 w-3 text-blue-400 shrink-0" title="Admin" />}
                         </div>
-                        <p className="text-[11px] text-muted-foreground/70">@{p?.username} · Nível {m.level}</p>
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+                          <span>@{p?.username}</span>
+                          <span className="text-muted-foreground/30">·</span>
+                          <span>Nv.{m.level}</span>
+                          {p?.status_text && (
+                            <>
+                              <span className="text-muted-foreground/30">·</span>
+                              <span className="truncate italic text-muted-foreground/50">&ldquo;{p.status_text}&rdquo;</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                       <LevelBadge xp={m.xp ?? 0} size="sm" />
                       {canKick && m.user_id !== server.owner_id && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0"
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                           onClick={() => kickMember(m.user_id)} title="Remover membro">
                           <UserMinus className="h-4 w-4" />
                         </Button>

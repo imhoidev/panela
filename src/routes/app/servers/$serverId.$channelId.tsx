@@ -372,7 +372,7 @@ function ChannelView() {
                   ))}
                   {channelCount === 0 && (
                     <div className="p-6 text-center text-xs text-muted-foreground/50 italic">
-                      {ctx?.memberLevel && ctx.memberLevel > 0 ? "Nenhum canal disponível" : "Entre na panela para ver os canais"}
+                      Nenhum canal disponível ainda
                     </div>
                   )}
                 </div>
