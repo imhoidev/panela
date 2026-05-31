@@ -13,18 +13,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MemberList } from "@/components/MemberList";
-import { ServerRolesDialog } from "@/components/ServerRoles";
+import { ServerRoles } from "@/components/ServerRoles";
+import { ServerStickers } from "@/components/ServerStickers";
 import { ServerEventsDialog } from "@/components/ServerEvents";
 import { InvitesDialog } from "@/components/Invites";
 import { ThemeDialog } from "@/components/ThemeConfig";
 import { BanDialog } from "@/components/ModPanel";
 import { LevelBadge } from "@/components/LevelBadge";
 import { StatusDot } from "@/components/PresenceStatus";
-import { getSocket } from "@/lib/socket";
+
 import {
   Hash, Plus, Settings, LogOut, Volume2, Menu, Users, Copy, AtSign, Check, Shield,
   ChevronDown, Search, MessageSquare, X, Crown, UserMinus,
-  Edit3, Globe, Lock, ArrowLeft,
+  Edit3, Globe, Lock, ArrowLeft, Sticker,
 } from "lucide-react";
 import { toast } from "sonner";
 import { slugify, isValidSlug } from "@/lib/slug";
@@ -82,15 +83,24 @@ function ServerLayout() {
 
   useEffect(() => {
     if (!user) return;
-    const s = getSocket(user.id);
-    const onUsers = (users: { userId: string; status: string }[]) => {
+    const presenceChan = supabase.channel(`presence:${serverId}`, {
+      config: { presence: { key: user.id } },
+    });
+    presenceChan.on("presence", { event: "sync" }, () => {
+      const state = presenceChan.presenceState();
       const m = new Map<string, string>();
-      users.forEach((u) => m.set(u.userId, u.status || "online"));
+      Object.entries(state).forEach(([uid, infos]: [string, any]) => {
+        const s = infos?.[0]?.status || "online";
+        m.set(uid, s);
+      });
       setPresence(m);
-    };
-    s.on("presence:users", onUsers);
-    s.on("connect", () => s.emit("presence:join", { userId: user.id, serverId }));
-    return () => { s.off("presence:users"); s.off("connect"); s.disconnect(); };
+    });
+    presenceChan.subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        await presenceChan.track({ user_id: user.id, status: "online", server_id: serverId });
+      }
+    });
+    return () => { supabase.removeChannel(presenceChan); };
   }, [user?.id, serverId]);
 
   async function load() {
@@ -121,7 +131,7 @@ function ServerLayout() {
   async function loadMembers() {
     const { data: mems } = await supabase
       .from("server_members")
-      .select("user_id, level, xp")
+      .select("id, user_id, level, xp")
       .eq("server_id", serverId);
     if (!mems?.length) { setMembers([]); return; }
     const userIds = mems.map((m) => m.user_id);
@@ -573,6 +583,8 @@ function ServerSettingsPanel({
   const [uploadingIcon, setUploadingIcon] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [memberSort, setMemberSort] = useState("level");
+  const [allRoles, setAllRoles] = useState<any[]>([]);
+  const [memberRoleMap, setMemberRoleMap] = useState<Map<string, string[]>>(new Map());
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -580,6 +592,24 @@ function ServerSettingsPanel({
     setEditDesc(server.description ?? "");
     setEditPrivacy(server.privacy || "public");
   }, [server.name, server.description, server.privacy]);
+
+  useEffect(() => {
+    if (tab !== "members" && tab !== "roles") return;
+    supabase.from("server_roles").select("*").eq("server_id", serverId).order("level", { ascending: false }).then(({ data }) => {
+      setAllRoles(data ?? []);
+    });
+    supabase.from("server_member_roles").select("member_id, role_id, server_members!inner(user_id)").then(({ data }) => {
+      const map = new Map<string, string[]>();
+      (data ?? []).forEach((mr: any) => {
+        const uid = mr.server_members?.user_id;
+        if (!uid) return;
+        const ids = map.get(uid) ?? [];
+        ids.push(mr.role_id);
+        map.set(uid, ids);
+      });
+      setMemberRoleMap(map);
+    });
+  }, [tab, serverId]);
 
   async function saveSettings() {
     setSaving(true);
@@ -678,10 +708,11 @@ function ServerSettingsPanel({
             <p className="text-[11px] text-muted-foreground">{server.member_count} {server.member_count === 1 ? "membro" : "membros"} · {editPrivacy === "private" ? "Privado" : "Público"}</p>
           </div>
         </div>
-        <TabsList className="w-full grid grid-cols-3 h-9">
+        <TabsList className="w-full grid grid-cols-4 h-9">
           <TabsTrigger value="overview" className="gap-1.5 text-xs"><Settings className="h-3.5 w-3.5" /> Geral</TabsTrigger>
           <TabsTrigger value="members" className="gap-1.5 text-xs"><Users className="h-3.5 w-3.5" /> Membros</TabsTrigger>
           <TabsTrigger value="roles" className="gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" /> Cargos</TabsTrigger>
+          <TabsTrigger value="stickers" className="gap-1.5 text-xs"><Sticker className="h-3.5 w-3.5" /> Figurinhas</TabsTrigger>
         </TabsList>
       </div>
 
@@ -785,10 +816,21 @@ function ServerSettingsPanel({
                         }`} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="text-sm font-medium truncate">{p?.display_name || p?.username}</p>
                           {m.user_id === server.owner_id && <Crown className="h-3 w-3 text-yellow-500 shrink-0" />}
                           {m.level >= 80 && <Shield className="h-3 w-3 text-blue-400 shrink-0" title="Admin" />}
+                          {(memberRoleMap.get(m.user_id) ?? []).map((rid) => {
+                            const r = allRoles.find((rl: any) => rl.id === rid);
+                            if (!r) return null;
+                            return (
+                              <span key={rid} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium leading-none"
+                                style={{ backgroundColor: r.color ? `${r.color}22` : undefined, color: r.color || undefined, border: `1px solid ${r.color ? `${r.color}44` : 'transparent'}` }}>
+                                {r.gif_tag_url && <img src={r.gif_tag_url} alt="" className="h-3 w-3 rounded-sm object-cover" />}
+                                {r.name}
+                              </span>
+                            );
+                          })}
                         </div>
                         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
                           <span>@{p?.username}</span>
@@ -797,18 +839,61 @@ function ServerSettingsPanel({
                           {p?.status_text && (
                             <>
                               <span className="text-muted-foreground/30">·</span>
-                              <span className="truncate italic text-muted-foreground/50">&ldquo;{p.status_text}&rdquo;</span>
+                              <span className="truncate italic text-muted-foreground/50 max-w-[100px]">&ldquo;{p.status_text}&rdquo;</span>
                             </>
                           )}
                         </div>
                       </div>
-                      <LevelBadge xp={m.xp ?? 0} size="sm" />
-                      {canKick && m.user_id !== server.owner_id && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => kickMember(m.user_id)} title="Remover membro">
-                          <UserMinus className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {canManage && m.user_id !== server.owner_id && allRoles.length > 0 && (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground/40 hover:text-foreground hover:bg-accent/50" title="Gerenciar cargos">
+                                <Shield className="h-3.5 w-3.5" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" side="left" className="w-56 p-2">
+                              <p className="text-xs font-medium text-muted-foreground mb-2 px-1">Atribuir cargos</p>
+                              <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                                {allRoles.map((r: any) => {
+                                  const has = (memberRoleMap.get(m.user_id) ?? []).includes(r.id);
+                                  return (
+                                    <label key={r.id} className="flex items-center gap-2 px-1 py-1.5 rounded hover:bg-accent cursor-pointer text-sm"
+                                      onClick={async () => {
+                                        if (has) {
+                                          await supabase.from("server_member_roles").delete().eq("member_id", m.id).eq("role_id", r.id);
+                                          const newMap = new Map(memberRoleMap);
+                                          newMap.set(m.user_id, (newMap.get(m.user_id) ?? []).filter((rid) => rid !== r.id));
+                                          setMemberRoleMap(newMap);
+                                        } else {
+                                          await supabase.from("server_member_roles").insert({ member_id: m.id, role_id: r.id });
+                                          const newMap = new Map(memberRoleMap);
+                                          newMap.set(m.user_id, [...(newMap.get(m.user_id) ?? []), r.id]);
+                                          setMemberRoleMap(newMap);
+                                        }
+                                      }}>
+                                      <div className={`h-3.5 w-3.5 rounded border flex items-center justify-center transition-colors ${
+                                        has ? "bg-primary border-primary" : "border-muted-foreground/30"
+                                      }`}>
+                                        {has && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                                      </div>
+                                      {r.color && <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: r.color }} />}
+                                      <span className="truncate">{r.name}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                        <LevelBadge xp={m.xp ?? 0} size="sm" />
+                        {canKick && m.user_id !== server.owner_id && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => kickMember(m.user_id)} title="Remover membro">
+                            <UserMinus className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -818,8 +903,12 @@ function ServerSettingsPanel({
         </TabsContent>
 
         <TabsContent value="roles" className="mt-0 space-y-3">
-          <p className="text-sm text-muted-foreground/70">Gerencie os cargos e permissões do servidor.</p>
-          <ServerRolesDialog serverId={serverId} canManage={canManage} />
+          <p className="text-sm text-muted-foreground/70">Cargos definem permissões, cores e badges visuais no servidor.</p>
+          <ServerRoles serverId={serverId} canManage={canManage} />
+        </TabsContent>
+        <TabsContent value="stickers" className="mt-0 space-y-3">
+          <p className="text-sm text-muted-foreground/70">Crie packs de figurinhas para o servidor.</p>
+          <ServerStickers serverId={serverId} canManage={canManage} />
         </TabsContent>
       </div>
     </Tabs>

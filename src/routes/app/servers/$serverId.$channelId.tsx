@@ -15,7 +15,7 @@ import { GifPicker } from "@/components/GifPicker";
 import { StickerPicker } from "@/components/StickerPicker";
 import { ReportDialog } from "@/components/ModPanel";
 import { MemberList } from "@/components/MemberList";
-import { getSocket } from "@/lib/socket";
+
 import { toast } from "sonner";
 import { useServerContext } from "./$serverId";
 import {
@@ -90,8 +90,8 @@ function ChannelView() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const profilesCache = useRef<Map<string, Msg["author"]>>(new Map());
+  const memberRolesCache = useRef<Map<string, { name: string; color: string | null; gif_tag_url: string | null }[]>>(new Map());
   const typingChan = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const sockRef = useRef<ReturnType<typeof getSocket> | null>(null);
   const lastTypingSent = useRef(0);
   const prevScrollHeight = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -105,14 +105,34 @@ function ChannelView() {
     return (data as any) ?? null;
   }
 
+  async function loadRoles() {
+    const { data: allRoles } = await supabase.from("server_roles").select("id, name, color, gif_tag_url").eq("server_id", serverId);
+    const rolesMap = new Map((allRoles ?? []).map((r: any) => [r.id, r]));
+    const { data: memRoles } = await supabase.from("server_member_roles")
+      .select("member_id, role_id, server_members!inner(user_id)");
+    const userRoles = new Map<string, any[]>();
+    (memRoles ?? []).forEach((mr: any) => {
+      const uid = mr.server_members?.user_id;
+      if (!uid) return;
+      const role = rolesMap.get(mr.role_id);
+      if (!role) return;
+      const list = userRoles.get(uid) ?? [];
+      list.push(role);
+      userRoles.set(uid, list);
+    });
+    memberRolesCache.current = userRoles;
+  }
+
   async function load() {
     const { data: c } = await supabase.from("channels").select("*").eq("id", channelId).maybeSingle();
     setChannel(c);
     knownIds.current.clear();
     if (!c || c.type === "voice") { setMessages([]); setReactions([]); return; }
-    const { data: msgs } = await supabase.from("messages")
-      .select("*").eq("channel_id", channelId).is("thread_root", null).order("created_at", { ascending: true }).limit(100);
-    const list = (msgs ?? []) as Msg[];
+    const [msgsRes] = await Promise.all([
+      supabase.from("messages").select("*").eq("channel_id", channelId).is("thread_root", null).order("created_at", { ascending: true }).limit(100),
+      loadRoles(),
+    ]);
+    const list = (msgsRes.data ?? []) as Msg[];
     list.forEach((m) => knownIds.current.add(m.id));
     const authors = Array.from(new Set(list.map((m) => m.author_id)));
     if (authors.length) {
@@ -202,45 +222,21 @@ function ChannelView() {
     return () => { supabase.removeChannel(ch); typingChan.current = null; };
   }, [channelId, user?.id, channel?.type]);
 
-  // Socket.io (instant delivery)
+  // Typing via Supabase Realtime broadcast
   useEffect(() => {
-    if (!user) return;
-    const s = getSocket(user.id);
-    sockRef.current = s;
-    const onConnect = () => { s.emit("presence:join", { userId: user.id, serverId }); if (channelId) s.emit("channel:join", channelId); };
-    const onUsers = (users: { userId: string; status: string }[]) => {
-      const m = new Map<string, string>(); users.forEach((u) => m.set(u.userId, u.status || "online")); setPresence(m);
-    };
-    const onTypingStart = ({ userId: uid, username }: { userId: string; username: string }) => {
-      if (uid === user.id) return; setTyping((prev) => ({ ...prev, [uid]: { name: username, t: Date.now() } }));
-    };
-    const onTypingStop = ({ userId: uid }: { userId: string }) => { setTyping((prev) => { const n = { ...prev }; delete n[uid]; return n; }); };
-    const onMessageNew = async (m: Msg) => {
-      if (m.thread_root || knownIds.current.has(m.id) || m.author_id === user.id) return;
-      knownIds.current.add(m.id);
-      m.author = await fetchProfile(m.author_id);
-      setMessages((prev) => [...prev, m]);
-      requestAnimationFrame(() => {
-        if (scrollRef.current) {
-          const atBottom = scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight < 150;
-          if (atBottom) scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-        }
-      });
-    };
-    const onMessageDeleted = ({ messageId }: { messageId: string }) => {
-      knownIds.current.delete(messageId);
-      setMessages((prev) => prev.filter((x) => x.id !== messageId));
-    };
-    const onMessageUpdated = async (m: Msg) => {
-      m.author = await fetchProfile(m.author_id);
-      setMessages((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x));
-    };
-    if (s.connected) onConnect();
-    s.on("connect", onConnect); s.on("presence:users", onUsers); s.on("typing:start", onTypingStart); s.on("typing:stop", onTypingStop);
-    s.on("message:new", onMessageNew); s.on("message:deleted", onMessageDeleted); s.on("message:updated", onMessageUpdated);
-    const interval = setInterval(() => { setTyping((prev) => { const now = Date.now(); const next: typeof prev = {}; for (const [k, v] of Object.entries(prev)) if (now - v.t < 4000) next[k] = v; return next; }); }, 1000);
-    return () => { clearInterval(interval); s.off("connect", onConnect); s.off("presence:users", onUsers); s.off("typing:start", onTypingStart); s.off("typing:stop", onTypingStop); s.off("message:new", onMessageNew); s.off("message:deleted", onMessageDeleted); s.off("message:updated", onMessageUpdated); if (channelId) s.emit("channel:leave", channelId); sockRef.current = null; };
-  }, [user?.id, serverId, channelId]);
+    if (!user || !channel || channel.type === "voice") return;
+    const ch = supabase.channel(`typing:${channelId}`);
+    ch.on("broadcast", { event: "typing" }, ({ payload }: { payload: { userId: string; username: string } }) => {
+      if (payload.userId === user.id) return;
+      setTyping((prev) => ({ ...prev, [payload.userId]: { name: payload.username, t: Date.now() } }));
+    });
+    ch.subscribe();
+    typingChan.current = ch;
+    const interval = setInterval(() => {
+      setTyping((prev) => { const now = Date.now(); const next: typeof prev = {}; for (const [k, v] of Object.entries(prev)) if (now - v.t < 4000) next[k] = v; return next; });
+    }, 1000);
+    return () => { clearInterval(interval); supabase.removeChannel(ch); typingChan.current = null; };
+  }, [user?.id, channelId, channel?.type]);
 
   // Scroll detection
   useEffect(() => {
@@ -262,8 +258,9 @@ function ChannelView() {
   }
 
   function emitTyping() {
-    const s = sockRef.current; if (!s) return; const now = Date.now(); if (now - lastTypingSent.current < 2500) return;
-    lastTypingSent.current = now; s.emit("typing:start", { channelId, username: profile?.display_name || profile?.username });
+    const now = Date.now(); if (now - lastTypingSent.current < 2500) return;
+    lastTypingSent.current = now;
+    typingChan.current?.send({ type: "broadcast", event: "typing", payload: { userId: user!.id, username: profile?.display_name || profile?.username } });
   }
 
   async function send(e: React.FormEvent) {
@@ -279,8 +276,6 @@ function ChannelView() {
       knownIds.current.add(m.id);
       m.author = profilesCache.current.get(m.author_id) ?? null;
       setMessages((prev) => [...prev, m]);
-      const s = sockRef.current;
-      if (s) s.emit("message:new", { channelId, message: m });
       requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }));
     }
     setSending(false);
@@ -297,15 +292,12 @@ function ChannelView() {
     if (!confirm("Apagar essa mensagem?")) return;
     knownIds.current.delete(m.id);
     setMessages((prev) => prev.filter((x) => x.id !== m.id));
-    const s = sockRef.current; if (s) s.emit("message:deleted", { channelId, messageId: m.id });
     await supabase.from("messages").delete().eq("id", m.id);
   }
 
   async function saveEdit() {
     if (!editing) return; const c = editText.trim(); if (!c) return;
     await supabase.from("messages").update({ content: c, edited_at: new Date().toISOString() }).eq("id", editing.id);
-    const m = { ...editing, content: c, edited_at: new Date().toISOString() };
-    const s = sockRef.current; if (s) s.emit("message:updated", { channelId, message: m });
     setEditing(null);
   }
 
@@ -527,8 +519,20 @@ function MessageBubble({
           </div>
         )}
         {!sameAuthor && (
-          <div className="flex items-baseline gap-2 flex-wrap">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
             {m.author ? <UsernameBadge profile={m.author as any} /> : <span className="text-sm text-muted-foreground">…</span>}
+            {(() => {
+              const roles = memberRolesCache.current.get(m.author_id) ?? [];
+              const top = roles.sort((a, b) => (b as any).level - (a as any).level)?.[0];
+              if (!top) return null;
+              if (top.gif_tag_url) return <img src={top.gif_tag_url} alt="" className="h-4 w-4 rounded-sm object-cover shrink-0" title={top.name} />;
+              return (
+                <span className="text-[10px] font-medium leading-none px-1 py-0.5 rounded shrink-0"
+                  style={{ color: top.color || undefined, backgroundColor: top.color ? `${top.color}22` : undefined }}>
+                  {top.name}
+                </span>
+              );
+            })()}
             <span className="text-[10px] text-muted-foreground/50" title={new Date(m.created_at).toLocaleString("pt-BR")}>
               {relativeTime(m.created_at)}
             </span>
