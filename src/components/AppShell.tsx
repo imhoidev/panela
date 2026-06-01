@@ -4,12 +4,14 @@ import { PanelaLogo } from "./PanelaLogo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusPicker } from "./PresenceStatus";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Home, Users, Settings, Crown, LogOut, Sparkles, Compass, Plus, Hash, Menu, Search,
-  MessageSquare, Bell,
+  MessageSquare, Bell, Circle,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 type ServerLite = { id: string; name: string; icon_url: string | null };
@@ -38,24 +40,27 @@ export function AppShell({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const [myServers, setMyServers] = useState<ServerLite[]>([]);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const loadServers = useCallback(async () => {
+    if (!user) return;
+    const { data: mem } = await supabase.from("server_members").select("server_id").eq("user_id", user.id);
+    const ids = (mem ?? []).map((m) => m.server_id);
+    if (!ids.length) { setMyServers([]); setLoading(false); return; }
+    const { data } = await supabase.from("servers").select("id,name,icon_url").in("id", ids);
+    setMyServers(data ?? []);
+    setLoading(false);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
-    let cancelled = false;
-    async function load() {
-      const { data: mem } = await supabase.from("server_members").select("server_id").eq("user_id", user!.id);
-      const ids = (mem ?? []).map((m) => m.server_id);
-      if (!ids.length) { if (!cancelled) setMyServers([]); return; }
-      const { data } = await supabase.from("servers").select("id,name,icon_url").in("id", ids);
-      if (!cancelled) setMyServers(data ?? []);
-    }
-    load();
+    loadServers();
     const ch = supabase
       .channel(`my-servers-${user.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "server_members", filter: `user_id=eq.${user.id}` }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "server_members", filter: `user_id=eq.${user.id}` }, loadServers)
       .subscribe();
-    return () => { cancelled = true; supabase.removeChannel(ch); };
-  }, [user?.id]);
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id, loadServers]);
 
   useEffect(() => { setMobileOpen(false); }, [loc.pathname]);
 
@@ -63,22 +68,17 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const activeServerId = loc.pathname.startsWith("/app/servers/") ? loc.pathname.split("/")[3] : null;
   const inServer = !!activeServerId;
-  // Hide bottom nav when inside a channel or DM conversation
   const hideBottomNav = loc.pathname.match(/^\/app\/servers\/[^/]+\/[^/]+$/) || loc.pathname.match(/^\/app\/dms\/[^/]+$/);
 
   return (
     <div className="flex h-[100dvh] w-screen overflow-hidden bg-background text-foreground">
-      {/* Rail de servidores — DESKTOP */}
-      <ServersRail myServers={myServers} activeServerId={activeServerId} loc={loc} />
+      <ServersRail myServers={myServers} activeServerId={activeServerId} loc={loc} loading={loading} />
 
-      {/* Navegação principal — DESKTOP */}
       <aside className="hidden lg:flex w-60 flex-col border-r border-border bg-sidebar">
         <NavBlock profile={profile} roles={roles} loc={loc} onSignOut={async () => { await signOut(); router.navigate({ to: "/auth/login" }); }} />
       </aside>
 
-      {/* Conteúdo */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-        {/* Header mobile */}
         <header className="lg:hidden flex items-center gap-2 h-12 px-2 border-b border-border bg-sidebar/95 backdrop-blur pt-safe shrink-0 z-20">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
@@ -93,7 +93,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </SheetHeader>
               <div className="flex h-full min-h-0">
                 <div className="w-[60px] border-r border-sidebar-border bg-sidebar/60 py-2 overflow-y-auto shrink-0">
-                  <ServersRailInner myServers={myServers} activeServerId={activeServerId} loc={loc} compact />
+                  <ServersRailInner myServers={myServers} activeServerId={activeServerId} loc={loc} compact loading={loading} />
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col">
                   <NavBlock profile={profile} roles={roles} loc={loc} onSignOut={async () => { await signOut(); router.navigate({ to: "/auth/login" }); }} />
@@ -109,12 +109,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Button>
         </header>
 
-        {/* Main content area */}
         <main className="flex-1 min-w-0 min-h-0 overflow-auto overscroll-contain">
           {children}
         </main>
 
-        {/* Bottom nav — MOBILE */}
         {!hideBottomNav && (
           <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-sidebar/95 backdrop-blur pb-[max(0.25rem,env(safe-area-inset-bottom))] shadow-2xl shadow-black/40">
             <ul className="grid grid-cols-5 h-14">
@@ -164,7 +162,7 @@ function NavBlock({
           </Link>
         )}
       </nav>
-      <Link to="/app/u/$slug" params={{ slug: profile?.username ?? "" }}
+      <Link to={{ to: "/app/u/$slug", params: { slug: profile?.username ?? "" } } as any}
         className="p-3 border-t border-sidebar-border flex items-center gap-2 min-h-[3.5rem] hover:bg-sidebar-accent/40 transition-colors">
         <Avatar className="h-9 w-9 shrink-0">
           <AvatarImage src={profile?.avatar_url ?? undefined} />
@@ -185,45 +183,88 @@ function NavBlock({
   );
 }
 
-function ServersRail({ myServers, activeServerId, loc }: { myServers: ServerLite[]; activeServerId: string | null; loc: ReturnType<typeof useLocation> }) {
+function ServersRail({ myServers, activeServerId, loc, loading }: { myServers: ServerLite[]; activeServerId: string | null; loc: ReturnType<typeof useLocation>; loading: boolean }) {
   return (
     <aside className="hidden md:flex w-[72px] flex-col items-center gap-2 border-r border-sidebar-border bg-sidebar py-3 overflow-y-auto">
-      <ServersRailInner myServers={myServers} activeServerId={activeServerId} loc={loc} />
+      <ServersRailInner myServers={myServers} activeServerId={activeServerId} loc={loc} loading={loading} />
     </aside>
   );
 }
 
+function ServerIcon({ s, active, size }: { s: ServerLite; active: boolean; size: string }) {
+  return (
+    <div className={`relative grid place-items-center overflow-hidden font-bold transition-all duration-300 ${size} ${
+      active ? "rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "rounded-2xl bg-sidebar-accent/70 hover:rounded-xl hover:bg-primary/80 text-muted-foreground hover:text-primary-foreground"
+    }`}>
+      {active && <span className="absolute -left-2.5 top-1/2 -translate-y-1/2 h-8 w-1 bg-primary rounded-r shadow-sm shadow-primary/40" />}
+      {s.icon_url ? (
+        <img src={s.icon_url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className={size === "h-10 w-10" ? "text-sm" : "text-base"}>{s.name[0]?.toUpperCase()}</span>
+      )}
+    </div>
+  );
+}
+
 function ServersRailInner({
-  myServers, activeServerId, loc, compact,
-}: { myServers: ServerLite[]; activeServerId: string | null; loc: ReturnType<typeof useLocation>; compact?: boolean }) {
+  myServers, activeServerId, loc, compact, loading,
+}: { myServers: ServerLite[]; activeServerId: string | null; loc: ReturnType<typeof useLocation>; compact?: boolean; loading?: boolean }) {
   const size = compact ? "h-10 w-10" : "h-12 w-12";
   const homeActive = loc.pathname === "/app";
   return (
     <div className="flex flex-col items-center gap-2 w-full">
-      <Link to="/app"
-        className={`grid place-items-center font-bold transition-all ${size} ${
-          homeActive ? "rounded-xl bg-primary text-primary-foreground" : "rounded-2xl bg-sidebar-accent hover:rounded-xl hover:bg-primary/80"
-        }`}>
-        <span className={compact ? "text-sm" : "text-base"}>P</span>
-      </Link>
-      <div className="h-px w-8 bg-sidebar-border" />
-      {myServers.map((s) => {
-        const active = activeServerId === s.id;
-        return (
-          <Link key={s.id} to="/app/servers/$serverId" params={{ serverId: s.id }} title={s.name}
-            className={`relative grid place-items-center overflow-hidden font-bold transition-all ${size} ${
-              active ? "rounded-xl bg-primary text-primary-foreground" : "rounded-2xl bg-sidebar-accent hover:rounded-xl hover:bg-primary/80"
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Link to="/app"
+            className={`grid place-items-center font-bold transition-all duration-300 ${size} ${
+              homeActive
+                ? "rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                : "rounded-2xl bg-sidebar-accent/70 hover:rounded-xl hover:bg-primary/80 text-muted-foreground hover:text-primary-foreground"
             }`}>
-            {active && <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-8 w-1 bg-primary rounded-r" />}
-            {s.icon_url ? <img src={s.icon_url} alt="" className="h-full w-full object-cover" /> : <span className={compact ? "text-sm" : "text-base"}>{s.name[0]?.toUpperCase()}</span>}
+            <span className={compact ? "text-sm" : "text-base"}>P</span>
           </Link>
-        );
-      })}
-      <Link to="/app/servers"
-        className={`grid place-items-center rounded-2xl bg-sidebar-accent text-primary hover:rounded-xl hover:bg-primary/15 transition-all ${size}`}
-        title="Nova panela / minhas">
-        <Plus className="h-5 w-5" />
-      </Link>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="text-xs">Início</TooltipContent>
+      </Tooltip>
+
+      <div className="h-px w-8 bg-sidebar-border" />
+
+      {loading ? (
+        <>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className={`${size} rounded-2xl bg-sidebar-accent/30 animate-pulse`} />
+          ))}
+        </>
+      ) : (
+        myServers.map((s) => {
+          const active = activeServerId === s.id;
+          return (
+            <Tooltip key={s.id}>
+              <TooltipTrigger asChild>
+                <Link to="/app/servers/$serverId" params={{ serverId: s.id }}>
+                  <ServerIcon s={s} active={active} size={size} />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs font-medium" sideOffset={8}>
+                <div className="flex items-center gap-1.5">
+                  {s.name}
+                  {active && <Circle className="h-1.5 w-1.5 fill-primary" />}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          );
+        })
+      )}
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Link to="/app/servers"
+            className={`grid place-items-center rounded-2xl bg-sidebar-accent/70 text-primary hover:rounded-xl hover:bg-primary/20 hover:text-primary transition-all duration-300 ${size}`}>
+            <Plus className="h-5 w-5" />
+          </Link>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="text-xs">Nova panela</TooltipContent>
+      </Tooltip>
     </div>
   );
 }

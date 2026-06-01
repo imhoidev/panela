@@ -1,12 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
+import { Label } from "@/components/ui/label";
 import { LevelBadge } from "@/components/LevelBadge";
-import { Search, Users, Shield, Crown, UserMinus, Check } from "lucide-react";
+import { useServerRoles, useMemberRoleMap, useKickMember, useBanMember, useMuteMember } from "@/hooks/servers";
+import { Search, Users, Shield, Crown, UserMinus, Check, Ban, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 
 export function ServerMembersTab({
@@ -19,23 +24,27 @@ export function ServerMembersTab({
 }) {
   const [memberSearch, setMemberSearch] = useState("");
   const [memberSort, setMemberSort] = useState("level");
-  const [allRoles, setAllRoles] = useState<any[]>([]);
-  const [memberRoleMap, setMemberRoleMap] = useState<Map<string, string[]>>(new Map());
+  const { data: allRoles = [], isLoading: rolesLoading } = useServerRoles(serverId);
+  const { data: memberRoleMap = new Map<string, string[]>(), isLoading: rolesMapLoading } = useMemberRoleMap(serverId);
+  const kickMutation = useKickMember(serverId);
+  const banMutation = useBanMember(serverId);
+  const muteMutation = useMuteMember(serverId);
 
-  useEffect(() => {
-    supabase.from("server_roles").select("*").eq("server_id", serverId).order("level", { ascending: false }).then(({ data }) => setAllRoles(data ?? []));
-    supabase.from("server_member_roles").select("member_id, role_id, server_members!inner(user_id)").then(({ data }) => {
-      const map = new Map<string, string[]>();
-      (data ?? []).forEach((mr: any) => {
-        const uid = mr.server_members?.user_id;
-        if (!uid) return;
-        const ids = map.get(uid) ?? [];
-        ids.push(mr.role_id);
-        map.set(uid, ids);
-      });
-      setMemberRoleMap(map);
-    });
-  }, [serverId]);
+  const [banTarget, setBanTarget] = useState<{ id: string; name: string } | null>(null);
+  const [banReason, setBanReason] = useState("");
+  const [banHours, setBanHours] = useState("");
+  const [muteTarget, setMuteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [muteReason, setMuteReason] = useState("");
+  const [muteHours, setMuteHours] = useState("");
+
+  if (rolesLoading || rolesMapLoading) {
+    return (
+      <div className="space-y-2">
+        <Skeleton className="h-9 w-full rounded-lg" />
+        {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+      </div>
+    );
+  }
 
   const sortedMembers = [...members].sort((a, b) => {
     if (a.user_id === server?.owner_id) return -1;
@@ -66,18 +75,22 @@ export function ServerMembersTab({
           <Input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)}
             placeholder="Buscar membros..." className="pl-8 h-9 text-sm" />
         </div>
-        <select value={memberSort} onChange={(e) => setMemberSort(e.target.value)}
-          className="h-9 rounded-lg border border-border bg-background px-2 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30">
-          <option value="level">Nivel</option>
-          <option value="name">Nome</option>
-          <option value="online">Online</option>
-        </select>
+        <Select value={memberSort} onValueChange={setMemberSort}>
+          <SelectTrigger className="w-[100px] h-9 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="level">Nível</SelectItem>
+            <SelectItem value="name">Nome</SelectItem>
+            <SelectItem value="online">Online</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {filteredMembers.length === 0 ? (
         <div className="flex flex-col items-center py-10 text-muted-foreground/60">
           <Users className="h-7 w-7 mb-2 opacity-40" />
-          <p className="text-xs font-medium">{memberSearch ? "Ninguem encontrado" : "Nenhum membro"}</p>
+          <p className="text-xs font-medium">{memberSearch ? "Ninguém encontrado" : "Nenhum membro"}</p>
         </div>
       ) : (
         <ScrollArea className="h-[300px] -mx-1 px-1">
@@ -114,10 +127,9 @@ export function ServerMembersTab({
                       })}
                     </div>
                     <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
-                      <span>@{p?.username}</span>
-                      <span className="text-muted-foreground/20">·</span>
+                      <span>@{p?.username}</span> <span className="text-muted-foreground/20">·</span>
                       <span>Nv.{m.level}</span>
-                      {p?.status_text && <><span className="text-muted-foreground/20">·</span><span className="truncate italic max-w-[80px]">&ldquo;{p.status_text}&rdquo;</span></>}
+                      {p?.status_text && <><span className="text-muted-foreground/20">·</span><span className="truncate italic max-w-[80px]">"{p.status_text}"</span></>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -138,14 +150,8 @@ export function ServerMembersTab({
                                   onClick={async () => {
                                     if (has) {
                                       await supabase.from("server_member_roles").delete().eq("member_id", m.id).eq("role_id", r.id);
-                                      const nm = new Map(memberRoleMap);
-                                      nm.set(m.user_id, (nm.get(m.user_id) ?? []).filter((rid) => rid !== r.id));
-                                      setMemberRoleMap(nm);
                                     } else {
                                       await supabase.from("server_member_roles").insert({ member_id: m.id, role_id: r.id });
-                                      const nm = new Map(memberRoleMap);
-                                      nm.set(m.user_id, [...(nm.get(m.user_id) ?? []), r.id]);
-                                      setMemberRoleMap(nm);
                                     }
                                   }}>
                                   <div className={`h-3 w-3 rounded border flex items-center justify-center ${has ? "bg-primary border-primary" : "border-muted-foreground/30"}`}>
@@ -161,9 +167,39 @@ export function ServerMembersTab({
                       </Popover>
                     )}
                     <LevelBadge xp={m.xp ?? 0} size="sm" />
+                    {canManage && m.user_id !== server.owner_id && (
+                      <>
+                        <ResponsiveDialog title="Silenciar membro"
+                          trigger={<Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground/40 hover:text-amber-500" title="Silenciar">
+                            <VolumeX className="h-3.5 w-3.5" /></Button>}>
+                          <div className="space-y-2.5">
+                            <p className="text-xs text-muted-foreground">Silenciar <strong>{p?.display_name || p?.username}</strong></p>
+                            <div className="space-y-1"><Label className="text-xs">Motivo</Label>
+                              <Input value={muteReason} onChange={(e) => setMuteReason(e.target.value)} className="h-9 text-sm" placeholder="Opcional" /></div>
+                            <div className="space-y-1"><Label className="text-xs">Duração (horas)</Label>
+                              <Input value={muteHours} onChange={(e) => setMuteHours(e.target.value)} className="h-9 text-sm" placeholder="Permanente se vazio" /></div>
+                            <Button onClick={() => { muteMutation.mutate({ userId: m.user_id, reason: muteReason, hours: muteHours }); setMuteTarget(null); }}
+                              variant="destructive" className="w-full h-9 text-xs">Silenciar</Button>
+                          </div>
+                        </ResponsiveDialog>
+                        <ResponsiveDialog title="Banir membro"
+                          trigger={<Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground/40 hover:text-destructive" title="Banir">
+                            <Ban className="h-3.5 w-3.5" /></Button>}>
+                          <div className="space-y-2.5">
+                            <p className="text-xs text-muted-foreground">Banir <strong>{p?.display_name || p?.username}</strong></p>
+                            <div className="space-y-1"><Label className="text-xs">Motivo</Label>
+                              <Input value={banReason} onChange={(e) => setBanReason(e.target.value)} className="h-9 text-sm" placeholder="Opcional" /></div>
+                            <div className="space-y-1"><Label className="text-xs">Duração (horas)</Label>
+                              <Input value={banHours} onChange={(e) => setBanHours(e.target.value)} className="h-9 text-sm" placeholder="Permanente se vazio" /></div>
+                            <Button onClick={() => { banMutation.mutate({ userId: m.user_id, reason: banReason, hours: banHours }); setBanTarget(null); }}
+                              variant="destructive" className="w-full h-9 text-xs">Banir</Button>
+                          </div>
+                        </ResponsiveDialog>
+                      </>
+                    )}
                     {canKick && m.user_id !== server.owner_id && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0 opacity-0 group-hover:opacity-100"
-                        onClick={() => kickMember(m.user_id)} title="Remover">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0"
+                        onClick={() => { if (confirm("Remover este membro?")) kickMutation.mutate(m.user_id); }} title="Remover">
                         <UserMinus className="h-3.5 w-3.5" />
                       </Button>
                     )}

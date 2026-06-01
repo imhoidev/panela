@@ -1,11 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
-import { Volume2, Hash, Pencil, ScrollText, MessageSquare, MessageSquareText, X } from "lucide-react";
+import { useServerChannels, useUpdateChannel, useDeleteChannel } from "@/hooks/servers";
+import {
+  Volume2, Hash, Pencil, ScrollText, MessageSquare, MessageSquareText, X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 const channelMeta = (type: string) => {
@@ -18,12 +22,11 @@ const channelMeta = (type: string) => {
   }
 };
 
-export function ServerChannelsTab({
-  serverId, canManage,
-}: {
-  serverId: string; canManage: boolean;
-}) {
-  const [channels, setChannels] = useState<any[]>([]);
+export function ServerChannelsTab({ serverId, canManage }: { serverId: string; canManage: boolean }) {
+  const { data: channels, isLoading } = useServerChannels(serverId);
+  const updateChannel = useUpdateChannel(serverId);
+  const deleteChannel = useDeleteChannel(serverId);
+
   const [editingChannel, setEditingChannel] = useState<any | null>(null);
   const [editName, setEditName] = useState("");
   const [editTopic, setEditTopic] = useState("");
@@ -31,63 +34,63 @@ export function ServerChannelsTab({
   const [editMinLevel, setEditMinLevel] = useState(1);
   const [editCategory, setEditCategory] = useState("");
 
-  useEffect(() => {
-    supabase.from("channels").select("*").eq("server_id", serverId).order("position").then(({ data }) => setChannels(data ?? []));
-  }, [serverId]);
-
   async function saveChannel() {
     if (!editingChannel) return;
-    const { error } = await supabase.from("channels").update({
+    updateChannel.mutate({
+      id: editingChannel.id,
       name: editName.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 32),
       topic: editTopic.trim() || null,
       description: editDesc.trim() || null,
       min_level: editMinLevel,
       category: editCategory.trim() || null,
-    }).eq("id", editingChannel.id);
-    if (error) return toast.error(error.message);
+    });
     setEditingChannel(null);
     toast.success("Canal atualizado");
-    supabase.from("channels").select("*").eq("server_id", serverId).order("position").then(({ data }) => setChannels(data ?? []));
   }
 
-  async function deleteChannel(id: string) {
-    if (!confirm("Deletar este canal permanentemente?")) return;
-    const { error } = await supabase.from("channels").delete().eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success("Canal deletado");
-    setChannels((prev) => prev.filter((c) => c.id !== id));
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
+      </div>
+    );
   }
 
   return (
     <div className="space-y-3">
-      {channels.length === 0 ? (
-        <p className="text-xs text-muted-foreground/60 text-center py-6">Nenhum canal.</p>
+      {!channels?.length ? (
+        <div className="flex flex-col items-center py-10 text-muted-foreground/60">
+          <Hash className="h-8 w-8 mb-2 opacity-30" />
+          <p className="text-xs font-medium">Nenhum canal</p>
+        </div>
       ) : (
         <ScrollArea className="h-[320px] -mx-1 px-1">
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             {channels.map((c: any) => {
               const { icon: ChanIcon, color: chanColor } = channelMeta(c.type);
               return (
-                <div key={c.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent/30 transition-colors group">
-                  <ChanIcon className={`h-4 w-4 shrink-0 ${chanColor}`} />
+                <div key={c.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-accent/30 transition-colors group">
+                  <div className={`h-8 w-8 rounded-lg grid place-items-center ${chanColor.replace("text-", "bg-").replace("500", "500/15")}`}>
+                    <ChanIcon className={`h-4 w-4 ${chanColor}`} />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-medium truncate">{c.name}</span>
-                      {c.category && <span className="text-[10px] text-muted-foreground/40">{c.category}</span>}
+                      {c.category && <span className="text-[10px] text-muted-foreground/40 border border-border/40 px-1.5 py-0.5 rounded">{c.category}</span>}
                     </div>
                     {c.topic && <p className="text-[10px] text-muted-foreground/60 truncate">{c.topic}</p>}
                   </div>
                   {canManage && (
-                    <button onClick={() => { setEditingChannel(c); setEditName(c.name); setEditTopic(c.topic ?? ""); setEditDesc(c.description ?? ""); setEditMinLevel(c.min_level ?? 1); setEditCategory(c.category ?? ""); }}
-                      className="p-1 text-muted-foreground/30 hover:text-foreground opacity-0 group-hover:opacity-100 transition-all">
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                  )}
-                  {canManage && (
-                    <button onClick={() => deleteChannel(c.id)}
-                      className="p-1 text-muted-foreground/30 hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                      <X className="h-3 w-3" />
-                    </button>
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                      <button onClick={() => { setEditingChannel(c); setEditName(c.name); setEditTopic(c.topic ?? ""); setEditDesc(c.description ?? ""); setEditMinLevel(c.min_level ?? 1); setEditCategory(c.category ?? ""); }}
+                        className="p-1.5 rounded text-muted-foreground/40 hover:text-foreground hover:bg-accent transition-colors" title="Editar">
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button onClick={() => { if (confirm("Deletar este canal permanentemente?")) deleteChannel.mutate(c.id); }}
+                        className="p-1.5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors" title="Deletar">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
                   )}
                 </div>
               );

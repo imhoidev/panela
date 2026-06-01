@@ -1,11 +1,10 @@
 import { createFileRoute, Outlet, Link, useParams, useRouter, useLocation } from "@tanstack/react-router";
-import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
@@ -21,9 +20,11 @@ import { ServerChannelsTab } from "@/components/ServerChannelsTab";
 import { ServerEventsDialog } from "@/components/ServerEvents";
 import { InvitesDialog } from "@/components/Invites";
 import { ModeracaoDialog } from "@/components/ModPanel";
-import { LevelBadge } from "@/components/LevelBadge";
-import { StatusDot } from "@/components/PresenceStatus";
-
+import {
+  useServerDetails, useServerChannels, useMemberLevel, useServerMembers,
+  useCreateChannel, useDeleteChannel, useKickMember,
+  useServerRealtime, usePresenceChannel,
+} from "@/hooks/servers";
 import {
   Hash, Plus, Settings, LogOut, Volume2, Menu, Users, Copy, AtSign, Check, Shield,
   ChevronDown, Search, MessageSquare, X, Crown, UserMinus,
@@ -32,7 +33,6 @@ import {
 import { toast } from "sonner";
 import { slugify, isValidSlug } from "@/lib/slug";
 
-/* ─── Context for child routes ─── */
 type ServerCtx = {
   server: any;
   presence: Map<string, string>;
@@ -69,147 +69,50 @@ function ServerLayout() {
   const { user } = useAuth();
   const router = useRouter();
   const loc = useLocation();
-  const [server, setServer] = useState<any>(null);
-  const [channels, setChannels] = useState<any[]>([]);
-  const [memberLevel, setMemberLevel] = useState(0);
+
+  const { data: server, isLoading: serverLoading, refetch: refetchServer } = useServerDetails(serverId);
+  const { data: channels = [], isLoading: channelsLoading } = useServerChannels(serverId);
+  const { data: memberLevel = 0 } = useMemberLevel(serverId, user?.id);
+  const { data: members = [] } = useServerMembers(serverId);
+  const createChannel = useCreateChannel(serverId);
+  const deleteChannelMut = useDeleteChannel(serverId);
+  const updateChannel = useUpdateChannel(serverId);
+  const kickMutation = useKickMember(serverId);
+
+  useServerRealtime(serverId);
+
+  const [presence, setPresence] = useState<Map<string, string>>(new Map());
+  usePresenceChannel(serverId, user?.id, useCallback((m) => setPresence(m), []));
+
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("text");
   const [newCategory, setNewCategory] = useState("");
   const [mobileChannelsOpen, setMobileChannelsOpen] = useState(false);
-  const [presence, setPresence] = useState<Map<string, string>>(new Map());
-  const [members, setMembers] = useState<any[]>([]);
-  const [memberSearch, setMemberSearch] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   const [toolsOpen, setToolsOpen] = useState(false);
 
-  useEffect(() => {
-    if (!user) return;
-    const presenceChan = supabase.channel(`presence:${serverId}`, {
-      config: { presence: { key: user.id } },
-    });
-    presenceChan.on("presence", { event: "sync" }, () => {
-      const state = presenceChan.presenceState();
-      const m = new Map<string, string>();
-      Object.entries(state).forEach(([uid, infos]: [string, any]) => {
-        const s = infos?.[0]?.status || "online";
-        m.set(uid, s);
-      });
-      setPresence(m);
-    });
-    presenceChan.subscribe(async (status) => {
-      if (status === "SUBSCRIBED") {
-        await presenceChan.track({ user_id: user.id, status: "online", server_id: serverId });
-      }
-    });
-    return () => { supabase.removeChannel(presenceChan); };
-  }, [user?.id, serverId]);
-
-  async function load() {
-    if (!user) return;
-    let [{ data: s }, { data: ch }, { data: mem }] = await Promise.all([
-      supabase.from("servers").select("*").eq("id", serverId).maybeSingle(),
-      supabase.from("channels").select("*").eq("server_id", serverId).order("position"),
-      supabase.from("server_members").select("level").eq("server_id", serverId).eq("user_id", user.id).maybeSingle(),
-    ]);
-    // Auto-fix: if owner but not a member (trigger wasn't applied for existing servers)
-    if (s && !mem && s.owner_id === user.id) {
-      await supabase.from("server_members").insert({
-        server_id: serverId, user_id: user.id, level: 99,
-      });
-      mem = { level: 99 };
-      // Re-fetch channels now that we're a member
-      const { data: ch2 } = await supabase
-        .from("channels").select("*").eq("server_id", serverId).order("position");
-      ch = ch2;
-    }
-    setServer(s); setChannels(ch ?? []); setMemberLevel(mem?.level ?? 0);
-    if (s && ch && ch.length > 0 && loc.pathname === `/app/servers/${serverId}`) {
-      const first = ch.find((c: any) => c.type === "text") ?? ch[0];
-      router.navigate({ to: "/app/servers/$serverId/$channelId", params: { serverId, channelId: first.id }, replace: true });
-    }
-  }
-
-  async function loadMembers() {
-    const { data: mems } = await supabase
-      .from("server_members")
-      .select("id, user_id, level, xp")
-      .eq("server_id", serverId);
-    if (!mems?.length) { setMembers([]); return; }
-    const userIds = mems.map((m) => m.user_id);
-    const { data: profs } = await supabase
-      .from("profiles")
-      .select("id, username, display_name, avatar_url, name_color, name_colors, name_effect, current_plan, status_text")
-      .in("id", userIds);
-    const profMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p]));
-    // Sort: owner first, then by level desc, then by name
-    const sorted = mems
-      .map((m) => ({ ...m, profiles: profMap[m.user_id] || null }))
-      .sort((a, b) => {
-        if (a.user_id === server?.owner_id) return -1;
-        if (b.user_id === server?.owner_id) return 1;
-        if (b.level !== a.level) return b.level - a.level;
-        const na = a.profiles?.display_name || a.profiles?.username || "";
-        const nb = b.profiles?.display_name || b.profiles?.username || "";
-        return na.localeCompare(nb);
-      });
-    setMembers(sorted);
-  }
-
-  useEffect(() => { load(); }, [serverId, user?.id]);
-  useEffect(() => { if (settingsOpen) { loadMembers(); load(); } }, [settingsOpen]);
-
-  useEffect(() => {
-    const ch = supabase.channel(`server-${serverId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "channels", filter: `server_id=eq.${serverId}` }, load)
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [serverId]);
-
-  // Re-fetch server row when members join/leave (member_count updates)
-  useEffect(() => {
-    const ch = supabase.channel(`server-members-${serverId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "server_members", filter: `server_id=eq.${serverId}` },
-        () => { supabase.from("servers").select("*").eq("id", serverId).maybeSingle().then(({ data }) => { if (data) setServer(data); }); })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [serverId]);
-
   useEffect(() => { setMobileChannelsOpen(false); }, [loc.pathname]);
 
-  async function addChannel() {
-    if (!newName.trim()) return;
-    const slug = newName.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 32);
-    const { error } = await supabase.from("channels").insert({
-      server_id: serverId, name: slug, type: newType, position: channels.length,
-      category: newCategory.trim() || null,
-    });
-    if (error) return toast.error(error.message);
-    setOpen(false); setNewName(""); setNewCategory("");
-  }
+  // Auto-redirect to first text channel when at server root
+  useEffect(() => {
+    if (server && channels.length > 0 && loc.pathname === `/app/servers/${serverId}`) {
+      const first = channels.find((c: any) => c.type === "text") ?? channels[0];
+      router.navigate({ to: "/app/servers/$serverId/$channelId", params: { serverId, channelId: first.id }, replace: true });
+    }
+  }, [server?.id, channels.length, loc.pathname]);
 
-  async function deleteChannel(channelId: string) {
-    if (!confirm("Deletar este canal permanentemente?")) return;
-    const { error } = await supabase.from("channels").delete().eq("id", channelId);
-    if (error) toast.error(error.message);
-  }
+  // Auto-fix: if owner but not a member
+  useEffect(() => {
+    if (server && !memberLevel && server.owner_id === user?.id) {
+      supabase.from("server_members").insert({ server_id: serverId, user_id: user.id, level: 99 }).then(() => {
+        refetchServer();
+      });
+    }
+  }, [server?.id, memberLevel]);
 
-  async function leave() {
-    if (!user) return;
-    if (!confirm("Sair desta panela?")) return;
-    await supabase.from("server_members").delete().eq("server_id", serverId).eq("user_id", user.id);
-    router.navigate({ to: "/app/servers" });
-  }
-
-  async function kickMember(targetUserId: string) {
-    if (!confirm("Remover este membro?")) return;
-    await supabase.from("server_members").delete().eq("server_id", serverId).eq("user_id", targetUserId);
-    toast.success("Membro removido");
-    loadMembers();
-  }
-
-  if (!server) return (
+  if (serverLoading || !server) return (
     <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-8 bg-gradient-to-b from-transparent to-card/10">
       <div className="flex flex-col items-center gap-2">
         <div className="h-8 w-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
@@ -224,13 +127,37 @@ function ServerLayout() {
 
   const categories = new Map<string, any[]>();
   const uncategorized: any[] = [];
-  channels.forEach((c) => {
+  channels.forEach((c: any) => {
     if (c.category) { const arr = categories.get(c.category) ?? []; arr.push(c); categories.set(c.category, arr); }
     else { uncategorized.push(c); }
   });
 
   const toggleCat = (cat: string) => {
     setCollapsedCats((prev) => { const next = new Set(prev); if (next.has(cat)) next.delete(cat); else next.add(cat); return next; });
+  };
+
+  const addChannel = () => {
+    if (!newName.trim()) return;
+    const slug = newName.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 32);
+    createChannel.mutate({ name: slug, type: newType, position: channels.length, category: newCategory.trim() || null });
+    setOpen(false); setNewName(""); setNewCategory("");
+  };
+
+  const deleteChannel = (channelId: string) => {
+    if (!confirm("Deletar este canal permanentemente?")) return;
+    deleteChannelMut.mutate(channelId);
+  };
+
+  const kickMember = (targetUserId: string) => {
+    if (!confirm("Remover este membro?")) return;
+    kickMutation.mutate(targetUserId);
+  };
+
+  const leave = async () => {
+    if (!user) return;
+    if (!confirm("Sair desta panela?")) return;
+    await supabase.from("server_members").delete().eq("server_id", serverId).eq("user_id", user.id);
+    router.navigate({ to: "/app/servers" });
   };
 
   const ctx: ServerCtx = {
@@ -246,7 +173,6 @@ function ServerLayout() {
 
   return (
     <div className="flex h-full min-h-0">
-      {/* Desktop sidebar */}
       <aside className="hidden md:flex w-64 flex-col border-r border-border bg-sidebar/95 shrink-0">
         <div className="p-3 border-b border-sidebar-border flex items-center gap-2.5">
           {server.icon_url ? (
@@ -263,12 +189,12 @@ function ServerLayout() {
                 {server.privacy === "private" ? <Lock className="h-2.5 w-2.5" /> : <Globe className="h-2.5 w-2.5" />}
                 {server.member_count} {server.member_count === 1 ? "membro" : "membros"}
                 <span className="text-muted-foreground/30 mx-0.5">·</span>
-                {Array.from(presence.values()).filter((s) => s !== "offline").length} online
+                {onlineCount} online
               </span>
               {server.slug && <span className="text-[10px] text-muted-foreground/40">· @{server.slug}</span>}
             </div>
           </div>
-          {isOwner && server.slug && <SlugEdit slug={server.slug} serverId={serverId} onSaved={load} />}
+          {isOwner && server.slug && <SlugEdit slug={server.slug} serverId={serverId} onSaved={() => refetchServer()} />}
         </div>
 
         <ChannelsList
@@ -287,7 +213,6 @@ function ServerLayout() {
       </aside>
 
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-        {/* Mobile top bar — only at server root (no channel selected) */}
         {!inChannel && (
           <div className="md:hidden flex items-center gap-2 px-3 h-12 border-b border-border bg-sidebar/95 backdrop-blur shrink-0">
             <Link to="/app/servers" className="md:hidden text-muted-foreground hover:text-foreground transition-colors">
@@ -310,7 +235,6 @@ function ServerLayout() {
           </div>
         )}
 
-        {/* Mobile channel sheet */}
         {inChannel && (
           <>
             <div className="md:hidden fixed bottom-20 right-4 z-30">
@@ -348,9 +272,7 @@ function ServerLayout() {
                       </div>
                     ))}
                     {channels.length === 0 && (
-                      <div className="p-6 text-center text-xs text-muted-foreground/50 italic">
-                        Nenhum canal disponível ainda
-                      </div>
+                      <div className="p-6 text-center text-xs text-muted-foreground/50 italic">Nenhum canal disponível ainda</div>
                     )}
                   </div>
                 </ScrollArea>
@@ -379,20 +301,15 @@ function ServerLayout() {
         contentClassName="h-full overflow-hidden p-0">
         <ServerSettingsPanel
           server={server} serverId={serverId} isOwner={isOwner} canManage={canManage} canKick={canKick}
-          members={members} memberSearch={memberSearch} setMemberSearch={setMemberSearch}
-          kickMember={kickMember} presence={presence} onServerUpdate={(s: any) => setServer(s)}
+          members={members} kickMember={kickMember} presence={presence}
+          onServerUpdate={(s: any) => refetchServer()}
         />
       </ResponsiveDialog>
     </div>
   );
 }
 
-/* ─── Channels List ─── */
-function ChannelsList({
-  categories, uncategorized, collapsedCats, toggleCat, channels,
-  serverId, loc, canManage, open, setOpen, newName, setNewName,
-  newType, setNewType, newCategory, setNewCategory, addChannel, deleteChannel,
-}: any) {
+function ChannelsList({ categories, uncategorized, collapsedCats, toggleCat, channels, serverId, loc, canManage, open, setOpen, newName, setNewName, newType, setNewType, newCategory, setNewCategory, addChannel, deleteChannel }: any) {
   return (
     <ScrollArea className="flex-1">
       <div className="p-2 space-y-0.5">
@@ -405,16 +322,16 @@ function ChannelsList({
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label>Tipo</Label>
-      <Select value={newType} onValueChange={(v: any) => setNewType(v)}>
-        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="text">Texto</SelectItem>
-          <SelectItem value="voice">Voz</SelectItem>
-          <SelectItem value="announcement">Anúncios</SelectItem>
-          <SelectItem value="rules">Regras</SelectItem>
-          <SelectItem value="forum">Forum</SelectItem>
-        </SelectContent>
-      </Select>
+                  <Select value={newType} onValueChange={(v: any) => setNewType(v)}>
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="text">Texto</SelectItem>
+                      <SelectItem value="voice">Voz</SelectItem>
+                      <SelectItem value="announcement">Anúncios</SelectItem>
+                      <SelectItem value="rules">Regras</SelectItem>
+                      <SelectItem value="forum">Forum</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Nome</Label>
@@ -429,17 +346,13 @@ function ChannelsList({
             </ResponsiveDialog>
           )}
         </div>
-
         {uncategorized.map((c: any) => (
           <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} />
         ))}
-
         {[...categories.entries()].map(([cat, chs]) => (
           <div key={cat}>
-            <button
-              onClick={() => toggleCat(cat)}
-              className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/60 hover:text-foreground/80 transition-colors rounded-md hover:bg-sidebar-accent/30"
-            >
+            <button onClick={() => toggleCat(cat)}
+              className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/60 hover:text-foreground/80 transition-colors rounded-md hover:bg-sidebar-accent/30">
               <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${collapsedCats.has(cat) ? "-rotate-90" : ""}`} />
               <span className="font-semibold">{cat}</span>
               <span className="ml-auto text-[9px] text-muted-foreground/40 font-mono">{chs.length}</span>
@@ -451,16 +364,12 @@ function ChannelsList({
             </div>
           </div>
         ))}
-
-        {channels.length === 0 && (
-          <p className="text-[11px] text-muted-foreground/40 text-center py-8">Nenhum canal ainda</p>
-        )}
+        {channels.length === 0 && <p className="text-[11px] text-muted-foreground/40 text-center py-8">Nenhum canal ainda</p>}
       </div>
     </ScrollArea>
   );
 }
 
-/* ─── Channel Item ─── */
 function channelMeta(type: string) {
   switch (type) {
     case "voice": return { icon: Volume2, color: "text-emerald-500" };
@@ -494,18 +403,11 @@ function ChannelItem({ c, serverId, loc, canManage, deleteChannel }: any) {
 
   return (
     <div className={`${active ? "relative " : ""}group`}>
-      {active && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />
-      )}
-      <Link
-        to="/app/servers/$serverId/$channelId"
-        params={{ serverId, channelId: c.id }}
+      {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />}
+      <Link to="/app/servers/$serverId/$channelId" params={{ serverId, channelId: c.id }}
         className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm flex-1 min-w-0 transition-all ml-1 ${
-          active
-            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm"
-            : "text-muted-foreground/80 hover:bg-sidebar-accent/50 hover:text-foreground"
-        }`}
-      >
+          active ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm" : "text-muted-foreground/80 hover:bg-sidebar-accent/50 hover:text-foreground"
+        }`}>
         <Icon className={`h-4 w-4 shrink-0 ${iconColor} ${active ? "drop-shadow-sm" : ""}`} />
         <span className="truncate text-[13px]">{c.name}</span>
       </Link>
@@ -523,32 +425,21 @@ function ChannelItem({ c, serverId, loc, canManage, deleteChannel }: any) {
       )}
       <ResponsiveDialog open={editOpen} onOpenChange={setEditOpen} title="Editar canal" className="max-w-md">
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Nome</Label>
-            <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-10" maxLength={32} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Topico (exibido no header do canal)</Label>
-            <Input value={editTopic} onChange={(e) => setEditTopic(e.target.value)} className="h-10" maxLength={128} placeholder="Assunto do canal..." />
-          </div>
+          <div className="space-y-1.5"><Label>Nome</Label><Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-10" maxLength={32} /></div>
+          <div className="space-y-1.5"><Label>Tópico</Label><Input value={editTopic} onChange={(e) => setEditTopic(e.target.value)} className="h-10" maxLength={128} placeholder="Assunto do canal..." /></div>
           {c.type === "rules" && (
             <div className="space-y-1.5">
-              <Label>Regras (descricao em destaque)</Label>
-              <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none min-h-[100px]" maxLength={2000} placeholder="Escreva as regras do servidor..." />
+              <Label>Regras</Label>
+              <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none min-h-[100px]" maxLength={2000} placeholder="Escreva as regras do servidor..." />
             </div>
           )}
           {c.type === "text" && (
-            <div className="space-y-1.5">
-              <Label>Descricao</Label>
-              <Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} className="h-10" maxLength={300} placeholder="Descricao do canal..." />
-            </div>
+            <div className="space-y-1.5"><Label>Descrição</Label><Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} className="h-10" maxLength={300} placeholder="Descrição do canal..." /></div>
           )}
           <div className="space-y-1.5">
-            <Label>Nivel minimo para acessar</Label>
+            <Label>Nível mínimo: {editMinLevel}</Label>
             <div className="flex items-center gap-2">
-              <input type="range" min={1} max={99} value={editMinLevel} onChange={(e) => setEditMinLevel(Number(e.target.value))}
-                className="flex-1 accent-primary" />
+              <input type="range" min={1} max={99} value={editMinLevel} onChange={(e) => setEditMinLevel(Number(e.target.value))} className="flex-1 accent-primary" />
               <span className="text-sm font-mono text-muted-foreground w-8 text-center">{editMinLevel}</span>
             </div>
           </div>
@@ -559,7 +450,6 @@ function ChannelItem({ c, serverId, loc, canManage, deleteChannel }: any) {
   );
 }
 
-/* ─── Server Toolbar ─── */
 function ServerToolbar({ canManage, isOwner, serverId, server, leave, settingsOpen, setSettingsOpen, toolsOpen, setToolsOpen }: any) {
   return (
     <div className="border-t border-sidebar-border bg-sidebar/80 shrink-0">
@@ -590,7 +480,6 @@ function ServerToolbar({ canManage, isOwner, serverId, server, leave, settingsOp
   );
 }
 
-/* ─── Slug Edit (inline compact) ─── */
 function SlugEdit({ slug, serverId, onSaved }: { slug: string; serverId: string; onSaved: () => void }) {
   const [copied, setCopied] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -644,27 +533,20 @@ function SlugEdit({ slug, serverId, onSaved }: { slug: string; serverId: string;
   );
 }
 
-/* ─── Server Settings ─── */
-function ServerSettingsPanel({
-  server, serverId, isOwner, canManage, canKick, members,
-  kickMember, presence, onServerUpdate,
-}: any) {
+function ServerSettingsPanel({ server, serverId, isOwner, canManage, canKick, members, kickMember, presence, onServerUpdate }: any) {
   const [tab, setTab] = useState("overview");
-
   return (
     <Tabs value={tab} onValueChange={setTab} className="flex flex-col h-full">
       <div className="p-4 md:p-5 pb-0">
         <div className="flex items-center gap-2.5 mb-3">
           <div className="relative shrink-0">
-            {server.icon_url ? (
-              <img src={server.icon_url} className="h-9 w-9 rounded-xl object-cover ring-2 ring-border" alt="" />
-            ) : (
+            {server.icon_url ? <img src={server.icon_url} className="h-9 w-9 rounded-xl object-cover ring-2 ring-border" alt="" /> : (
               <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary/30 to-primary/10 ring-2 ring-border grid place-items-center font-bold text-primary text-sm">{server.name[0]?.toUpperCase()}</div>
             )}
           </div>
           <div className="min-w-0">
             <h3 className="font-semibold text-sm truncate leading-tight">{server.name}</h3>
-            <p className="text-[10px] text-muted-foreground/60">{server.member_count} {server.member_count === 1 ? "membro" : "membros"} · {server.privacy === "private" ? "Privado" : "Publico"}</p>
+            <p className="text-[10px] text-muted-foreground/60">{server.member_count} {server.member_count === 1 ? "membro" : "membros"} · {server.privacy === "private" ? "Privado" : "Público"}</p>
           </div>
         </div>
         <TabsList className="w-full h-8">
@@ -675,25 +557,20 @@ function ServerSettingsPanel({
           <TabsTrigger value="stickers" className="text-xs gap-1"><Sticker className="h-3 w-3" />Figurinhas</TabsTrigger>
         </TabsList>
       </div>
-
       <div className="flex-1 overflow-auto p-4 md:p-5">
         <TabsContent value="overview" className="mt-0">
           <ServerOverviewTab server={server} serverId={serverId} isOwner={isOwner} canManage={canManage} onServerUpdate={onServerUpdate} />
         </TabsContent>
-
         <TabsContent value="members" className="mt-0">
           <ServerMembersTab server={server} serverId={serverId} canManage={canManage} canKick={canKick}
             members={members} kickMember={kickMember} presence={presence} isOwner={isOwner} />
         </TabsContent>
-
         <TabsContent value="channels" className="mt-0">
           <ServerChannelsTab serverId={serverId} canManage={canManage} />
         </TabsContent>
-
         <TabsContent value="roles" className="mt-0 space-y-3">
           <ServerRoles serverId={serverId} canManage={canManage} />
         </TabsContent>
-
         <TabsContent value="stickers" className="mt-0 space-y-3">
           <ServerStickers serverId={serverId} canManage={canManage} />
         </TabsContent>
@@ -706,15 +583,10 @@ function MobileChannelLink({ c, serverId, currentId }: { c: any; serverId: strin
   const active = currentId === c.id;
   const { icon: Icon, color: iconColor } = channelMeta(c.type);
   return (
-    <Link
-      to="/app/servers/$serverId/$channelId"
-      params={{ serverId, channelId: c.id }}
+    <Link to="/app/servers/$serverId/$channelId" params={{ serverId, channelId: c.id }}
       className={`flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-all ${
-        active
-          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-          : "text-muted-foreground/80 hover:bg-sidebar-accent/50 hover:text-foreground"
-      }`}
-    >
+        active ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" : "text-muted-foreground/80 hover:bg-sidebar-accent/50 hover:text-foreground"
+      }`}>
       <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />
       <span className="truncate">{c.name}</span>
     </Link>
