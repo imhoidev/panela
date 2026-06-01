@@ -122,8 +122,8 @@ function Settings() {
         <h2 className="font-semibold flex items-center gap-2"><Info className="h-4 w-4 text-primary" /> Sobre o PANELA</h2>
         <p className="text-sm text-muted-foreground">PANELA é uma plataforma social de comunidades com sabor de fórum 2008 e velocidade de 2026. Versão 3.0 — com DMs, temas, cargos, eventos e muito mais.</p>
         <div className="text-xs text-muted-foreground/60 pt-1">
-          <p>Feito com React 19 + TanStack Start + Supabase + LiveKit + Socket.io</p>
-          <p>Deploy: Vercel (frontend) · Render (backend)</p>
+          <profile className="italic">Feito com 🧑‍🍳 e ☕ em São Paulo</profile>
+          <p>Desenvolvido por <a href="https://instagram.com/breyky" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Breyky</a></p>
         </div>
       </Card>
     </div>

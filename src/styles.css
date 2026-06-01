@@ -6,8 +6,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================
-   PANELA — Design System v3 (Retrowave 2007)
-   Base #121215 dark + rosa neon (#FF4D94) + ciano turquesa (#00E5C0).
+   PANELA — Design System v4 (Dark Orange Neon)
+   Base #0A0A0B fundo + #121212 cards + laranja neon/glow.
    Tipografia: Inter + Space Grotesk display + Comic Neue opcional.
    ============================================================ */
 
@@ -57,52 +57,51 @@
   --font-display: 'Space Grotesk', 'Inter', sans-serif;
 }
 
-/* Dark default. #121215 fundo, #FF4D94 destaque rosa, #00E5C0 secundário. */
 :root, .dark {
   --radius: 0.75rem;
 
-  --background: oklch(0.184 0.006 286);             /* #121215 */
-  --foreground: oklch(0.933 0.011 286);             /* #E8E8F0 */
+  --background: #0A0A0B;
+  --foreground: #F2F2F2;
 
-  --card: oklch(0.252 0.008 264);                   /* #202226 */
-  --card-foreground: oklch(0.933 0.011 286);        /* #E8E8F0 */
-  --popover: oklch(0.252 0.008 264);                /* #202226 */
-  --popover-foreground: oklch(0.933 0.011 286);     /* #E8E8F0 */
+  --card: #121212;
+  --card-foreground: #F2F2F2;
+  --popover: #121212;
+  --popover-foreground: #F2F2F2;
 
-  --primary: oklch(0.688 0.22 0.5);                 /* #FF4D94 rosa */
-  --primary-foreground: oklch(0.184 0.006 286);     /* #121215 */
+  --primary: #FF6A00;
+  --primary-foreground: #0A0A0B;
 
-  --secondary: oklch(0.823 0.155 175);              /* #00E5C0 ciano */
-  --secondary-foreground: oklch(0.184 0.006 286);   /* #121215 */
+  --secondary: #FF9500;
+  --secondary-foreground: #0A0A0B;
 
-  --muted: oklch(0.224 0.012 278);                  /* #1A1B21 */
-  --muted-foreground: oklch(0.711 0.023 286);       /* #A0A0B0 */
-  --muted-extra: oklch(0.542 0.015 286);            /* #6E6E78 */
+  --muted: #2B2B2B;
+  --muted-foreground: #6F6F73;
+  --muted-extra: #6F6F73;
 
-  --accent: oklch(0.688 0.22 0.5);                  /* #FF4D94 rosa */
-  --accent-foreground: oklch(0.184 0.006 286);      /* #121215 */
+  --accent: #FF6A00;
+  --accent-foreground: #0A0A0B;
 
-  --destructive: oklch(0.669 0.221 15.6);           /* #FF4466 */
-  --destructive-foreground: oklch(0.184 0.006 286); /* #121215 */
+  --destructive: #D94D00;
+  --destructive-foreground: #0A0A0B;
 
-  --success: oklch(0.884 0.196 160);                /* #22FFAA */
+  --success: #FFC233;
 
-  --border: oklch(0.275 0.006 280);
-  --input: oklch(0.252 0.008 264);                  /* #202226 */
-  --ring: oklch(0.688 0.22 0.5);                    /* #FF4D94 rosa */
+  --border: #2B2B2B;
+  --input: #121212;
+  --ring: #FF7F11;
 
-  --panela: oklch(0.688 0.22 0.5);                  /* #FF4D94 rosa */
-  --panela-foreground: oklch(0.184 0.006 286);      /* #121215 */
-  --gold: oklch(0.83 0.16 85);                      /* mantido */
+  --panela: #FF6A00;
+  --panela-foreground: #0A0A0B;
+  --gold: #FFC233;
 
-  --sidebar: oklch(0.224 0.012 278);                /* #1A1B21 */
-  --sidebar-foreground: oklch(0.933 0.011 286);     /* #E8E8F0 */
-  --sidebar-primary: oklch(0.688 0.22 0.5);         /* #FF4D94 */
-  --sidebar-primary-foreground: oklch(0.184 0.006 286);
-  --sidebar-accent: oklch(0.252 0.008 264);         /* #202226 */
-  --sidebar-accent-foreground: oklch(0.933 0.011 286);
-  --sidebar-border: oklch(0.275 0.006 280);
-  --sidebar-ring: oklch(0.688 0.22 0.5);            /* #FF4D94 */
+  --sidebar: #121212;
+  --sidebar-foreground: #F2F2F2;
+  --sidebar-primary: #FF6A00;
+  --sidebar-primary-foreground: #0A0A0B;
+  --sidebar-accent: #2B2B2B;
+  --sidebar-accent-foreground: #F2F2F2;
+  --sidebar-border: #2B2B2B;
+  --sidebar-ring: #FF7F11;
 }
 
 @layer base {
@@ -110,11 +109,29 @@
   html, body { background: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
   body {
     background-image:
-      radial-gradient(circle at 12% -10%, oklch(0.688 0.22 0.5 / 0.08), transparent 50%),
-      radial-gradient(circle at 92% 110%, oklch(0.823 0.155 175 / 0.05), transparent 50%);
+      radial-gradient(circle at 12% -10%, rgba(255,106,0,0.08), transparent 45%),
+      radial-gradient(circle at 88% 105%, rgba(255,194,51,0.06), transparent 48%);
     min-height: 100vh;
     overscroll-behavior: none;
   }
+
+  .glow-primary {
+    box-shadow: 0 0 30px rgba(255,106,0,0.24), inset 0 0 18px rgba(255,149,0,0.12);
+  }
+
+  .glow-secondary {
+    box-shadow: 0 0 24px rgba(255,194,51,0.22), inset 0 0 14px rgba(255,127,17,0.1);
+  }
+
+  .panel-highlight {
+    background: rgba(255,106,0,0.08);
+    border: 1px solid rgba(255,127,17,0.14);
+  }
+
+  .text-highlight { color: #FFC233; }
+  .text-accent { color: #FF6A00; }
+  .border-accent { border-color: #FF7F11; }
+  .bg-accent-soft { background: rgba(255,106,0,0.1); }
   /* Safe-area mobile */
   .pb-safe { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
   .pt-safe { padding-top: max(0.25rem, env(safe-area-inset-top)); }

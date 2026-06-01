@@ -45,7 +45,7 @@ export const Route = createFileRoute("/app/dms/$conversationId")({
 
 function DMChat() {
   const { conversationId } = useParams({ from: "/app/dms/$conversationId" });
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [messages, setMessages] = useState<DM[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
@@ -185,13 +185,14 @@ function DMChat() {
   // Socket.io (instant delivery + typing + presence)
   useEffect(() => {
     if (!user) return;
-    const s = getSocket(user.id);
+    const s = getSocket(user.id, session?.access_token ?? undefined);
     sockRef.current = s;
     const otherId = otherProfile?.id;
 
     const onConnect = () => {
-      s.emit("presence:join", { userId: user.id, serverId: "__dm__" });
+      s.emit("presence:join", { serverId: "__dm__", status: "online" });
       if (conversationId) s.emit("dm:join", conversationId);
+      if (otherId) s.emit("presence:subscribe", [otherId]);
     };
     const onUsers = (users: { userId: string; status: string }[]) => {
       if (otherId) {

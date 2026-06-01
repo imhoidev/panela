@@ -359,9 +359,28 @@ const presence = new Map();        // userId -> { sockets: Set<socketId>, status
 const userStatus = new Map();      // userId -> "online" | "idle" | "dnd" | "offline"
 const roomPresence = new Map();    // serverId -> Map<userId, status>
 
-io.on("connection", (socket) => {
-  const { userId } = socket.handshake.auth ?? {};
-  if (!userId) { socket.disconnect(true); return; }
+io.on("connection", async (socket) => {
+  const auth = socket.handshake.auth ?? {};
+  const token = typeof auth.token === "string" ? auth.token : null;
+  const claimedUserId = typeof auth.userId === "string" ? auth.userId : null;
+
+  if (!token) {
+    socket.disconnect(true);
+    return;
+  }
+
+  const { data: userData, error: userErr } = await sb.auth.getUser(token);
+  if (userErr || !userData.user) {
+    socket.disconnect(true);
+    return;
+  }
+
+  const userId = userData.user.id;
+  if (claimedUserId && claimedUserId !== userId) {
+    console.warn(`[socket] claimed userId ${claimedUserId} does not match token user ${userId}`);
+  }
+
+  socket.data.userId = userId;
 
   if (!presence.has(userId)) presence.set(userId, { sockets: new Set(), status: "online", serverId: null });
   const entry = presence.get(userId);
@@ -370,27 +389,25 @@ io.on("connection", (socket) => {
   io.emit("presence:update", { userId, status: entry.status });
 
   // === PRESENCE:JOIN — join a server room with optional status ===
-  socket.on("presence:join", ({ userId: uid, serverId, status }) => {
-    if (uid !== userId) return;
+  socket.on("presence:join", ({ serverId, status }) => {
+    const uid = socket.data.userId;
     const s = ["online", "idle", "dnd", "invisible"].includes(status) ? status : "online";
     entry.status = s;
-    userStatus.set(userId, s);
+    userStatus.set(uid, s);
 
-    // Leave previous server room
     if (entry.serverId) {
       socket.leave(`srv:${entry.serverId}`);
       const prevRoom = roomPresence.get(entry.serverId);
-      if (prevRoom) { prevRoom.delete(userId); if (prevRoom.size === 0) roomPresence.delete(entry.serverId); }
+      if (prevRoom) { prevRoom.delete(uid); if (prevRoom.size === 0) roomPresence.delete(entry.serverId); }
     }
 
-    entry.serverId = serverId;
-    if (serverId) {
-      socket.join(`srv:${serverId}`);
-      if (!roomPresence.has(serverId)) roomPresence.set(serverId, new Map());
-      roomPresence.get(serverId).set(userId, s);
-      // Broadcast full member list to the server room
-      const users = Array.from(roomPresence.get(serverId).entries()).map(([id, st]) => ({ userId: id, status: st }));
-      io.to(`srv:${serverId}`).emit("presence:users", users);
+    entry.serverId = typeof serverId === "string" ? serverId : null;
+    if (entry.serverId) {
+      socket.join(`srv:${entry.serverId}`);
+      if (!roomPresence.has(entry.serverId)) roomPresence.set(entry.serverId, new Map());
+      roomPresence.get(entry.serverId).set(uid, s);
+      const users = Array.from(roomPresence.get(entry.serverId).entries()).map(([id, st]) => ({ userId: id, status: st }));
+      io.to(`srv:${entry.serverId}`).emit("presence:users", users);
     }
   });
 
@@ -419,35 +436,39 @@ io.on("connection", (socket) => {
 
   socket.on("presence:set", (status) => {
     if (!["online", "idle", "dnd", "invisible"].includes(status)) return;
+    const uid = socket.data.userId;
     entry.status = status;
-    userStatus.set(userId, status);
-    // Update in room presence
+    userStatus.set(uid, status);
     if (entry.serverId && roomPresence.has(entry.serverId)) {
-      roomPresence.get(entry.serverId).set(userId, status);
+      roomPresence.get(entry.serverId).set(uid, status);
       const users = Array.from(roomPresence.get(entry.serverId).entries()).map(([id, st]) => ({ userId: id, status: st }));
       io.to(`srv:${entry.serverId}`).emit("presence:users", users);
     }
-    io.emit("presence:update", { userId, status });
+    io.emit("presence:update", { userId: uid, status });
   });
 
   socket.on("presence:subscribe", (userIds) => {
     if (!Array.isArray(userIds)) return;
     const statuses = {};
-    for (const uid of userIds) statuses[uid] = userStatus.get(uid) || "offline";
+    for (const uid of userIds) {
+      if (typeof uid !== "string") continue;
+      statuses[uid] = userStatus.get(uid) || "offline";
+    }
     socket.emit("presence:bulk", statuses);
   });
 
   socket.on("disconnect", () => {
+    const uid = socket.data.userId;
     entry.sockets.delete(socket.id);
     if (entry.sockets.size === 0) {
       if (entry.serverId && roomPresence.has(entry.serverId)) {
-        roomPresence.get(entry.serverId).delete(userId);
+        roomPresence.get(entry.serverId).delete(uid);
         const users = Array.from(roomPresence.get(entry.serverId).entries()).map(([id, st]) => ({ userId: id, status: st }));
         io.to(`srv:${entry.serverId}`).emit("presence:users", users);
       }
-      presence.delete(userId);
-      userStatus.delete(userId);
-      io.emit("presence:update", { userId, status: "offline" });
+      presence.delete(uid);
+      userStatus.delete(uid);
+      io.emit("presence:update", { userId: uid, status: "offline" });
     }
   });
 });

@@ -47,7 +47,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 
 function PublicProfile() {
   const { slug } = useParams({ from: "/app/u/$slug" });
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [servers, setServers] = useState<any[]>([]);
@@ -66,6 +66,8 @@ function PublicProfile() {
     if (!slug) return;
     setTargetId(null); setNotFound(false);
     let cancelled = false;
+    let socketInstance: ReturnType<typeof getSocket> | null = null;
+    let cleanupSocket = () => {};
 
     async function load() {
       let profile: any;
@@ -110,19 +112,33 @@ function PublicProfile() {
       }
 
       setStatusText(profile.status_text || "");
-      const s = getSocket(uid);
-      const onUsers = (users: { userId: string; status: string }[]) => {
-        const found = users.find((u) => u.userId === uid);
-        if (found) setStatus(found.status || "online");
-      };
-      s.on("presence:users", onUsers);
-      if (s.connected) s.emit("presence:join", { userId: uid, serverId: "__profile__" });
-      else s.on("connect", () => s.emit("presence:join", { userId: uid, serverId: "__profile__" }));
+      if (user && session) {
+        const s = getSocket(user.id, session.access_token ?? undefined);
+        socketInstance = s;
+        const onUsers = (users: { userId: string; status: string }[]) => {
+          const found = users.find((u) => u.userId === uid);
+          if (found) setStatus(found.status || "online");
+        };
+        const joinProfileRoom = () => {
+          s.emit("presence:join", { serverId: "__profile__", status: "online" });
+          s.emit("presence:subscribe", [uid]);
+        };
+        s.on("presence:users", onUsers);
+        s.on("connect", joinProfileRoom);
+        if (s.connected) joinProfileRoom();
+        cleanupSocket = () => {
+          s.off("presence:users", onUsers);
+          s.off("connect", joinProfileRoom);
+        };
+      }
     }
 
     load();
-    return () => { cancelled = true; };
-  }, [slug, user?.id]);
+    return () => {
+      cancelled = true;
+      cleanupSocket();
+    };
+  }, [slug, user?.id, session?.access_token]);
 
   // ── 404 ──
   if (notFound) {

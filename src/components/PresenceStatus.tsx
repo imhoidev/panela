@@ -46,14 +46,14 @@ export function StatusText({ statusText }: { statusText?: string | null }) {
 }
 
 export function StatusPicker({ currentStatus, statusText: initialText, onSet }: { currentStatus?: string; statusText?: string | null; onSet?: (s: string) => void }) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [statusText, setStatusText] = useState(initialText ?? "");
   const [editingText, setEditingText] = useState(false);
 
   async function setStatus(status: string) {
     if (!user) return;
     await supabase.from("profiles").update({ status }).eq("id", user.id);
-    const s = getSocket(user.id);
+    const s = getSocket(user.id, session?.access_token ?? undefined);
     s.emit("presence:set", status);
     onSet?.(status);
   }
