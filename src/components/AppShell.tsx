@@ -4,7 +4,7 @@ import { PanelaLogo } from "./PanelaLogo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { StatusPicker } from "./PresenceStatus";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -212,6 +212,7 @@ function ServersRailInner({
   const size = compact ? "h-10 w-10" : "h-12 w-12";
   const homeActive = loc.pathname === "/app";
   return (
+    <TooltipProvider delayDuration={0}>
     <div className="flex flex-col items-center gap-2 w-full">
       <Tooltip>
         <TooltipTrigger asChild>
@@ -266,5 +267,6 @@ function ServersRailInner({
         <TooltipContent side="right" className="text-xs">Nova panela</TooltipContent>
       </Tooltip>
     </div>
+    </TooltipProvider>
   );
 }
