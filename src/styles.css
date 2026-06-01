@@ -262,3 +262,15 @@
 
 /* Mobile bottom sheet / drawer shadow */
 .drawer-overlay { background: rgba(0,0,0,0.6); }
+
+/* Category separators and DnD visuals */
+.category-separator {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: var(--radius-md);
+  color: var(--color-muted-foreground); font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+}
+.category-separator .count { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; font-size: 10px; color: color-mix(in oklab, var(--color-muted-foreground) 60%, transparent); }
+.channel-drag-placeholder { height: 40px; background: linear-gradient(90deg, rgba(255,106,0,0.06), rgba(255,194,51,0.03)); border: 1px dashed rgba(255,127,17,0.12); border-radius: 6px; margin: 4px 8px; }
+.channel-dragging { opacity: 0.6; transform: scale(0.995); }
+
+/* small helper for panel separators */
+.panel-separator { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,127,17,0.06), transparent); margin: 6px 0; }

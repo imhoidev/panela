@@ -264,6 +264,29 @@ async function handleRequest(req, res) {
       return;
     }
 
+    if (req.method === "POST" && url.pathname === "/api/channels/reorder") {
+      const auth = req.headers["authorization"] || "";
+      const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+      if (!token) { send(res, json({ error: "Unauthorized" }, 401)); return; }
+      const { data: { user: u }, error: ue } = await sb.auth.getUser(token);
+      if (ue || !u) { send(res, json({ error: "Invalid token" }, 401)); return; }
+      const body = JSON.parse(await getBody(req));
+      const items = Array.isArray(body) ? body : body.items;
+      if (!Array.isArray(items) || items.length === 0) { send(res, json({ error: "items required" }, 400)); return; }
+      const ids = items.map((i) => i.id).filter(Boolean);
+      const { data: channels } = await sbAdmin.from("channels").select("id,server_id").in("id", ids);
+      if (!channels || channels.length !== ids.length) { send(res, json({ error: "channels not found" }, 404)); return; }
+      const serverId = channels[0].server_id;
+      if (!channels.every((c) => c.server_id === serverId)) { send(res, json({ error: "channels must belong to same server" }, 400)); return; }
+      const { data: member } = await sbAdmin.from("server_members").select("level").eq("server_id", serverId).eq("user_id", u.id).maybeSingle();
+      if (!member || member.level < 80) { send(res, json({ error: "Sem permissão" }, 403)); return; }
+      const toUpsert = items.map((it) => ({ id: it.id, position: it.position ?? null, category: it.category ?? null }));
+      const { error: upErr } = await sbAdmin.from("channels").upsert(toUpsert, { onConflict: "id" });
+      if (upErr) { send(res, json({ error: upErr.message }, 500)); return; }
+      send(res, json({ ok: true }));
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/upload-sticker") {
       const auth = req.headers["authorization"] || "";
       const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;

@@ -375,8 +375,13 @@ function ChannelsList({ categories, uncategorized, collapsedCats, toggleCat, cha
             </ResponsiveDialog>
           )}
         </div>
-        {uncategorized.map((c: any) => (
-          <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} updateChannel={updateChannel} />
+        {uncategorized.map((c: any, idx: number) => (
+          <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} updateChannel={updateChannel}
+            index={idx} onMove={async (draggedId: string, before: boolean) => {
+              const newPos = before ? idx : idx + 1;
+              updateChannel.mutate({ id: draggedId, category: null, position: newPos });
+              toast.success("Canal movido");
+            }} />
         ))}
         {[...categories.entries()].map(([cat, chs]) => (
           <div key={cat} onDragOver={onDragOverCat} onDrop={(e) => onDropToCategory(e, cat, chs)}>
@@ -395,8 +400,13 @@ function ChannelsList({ categories, uncategorized, collapsedCats, toggleCat, cha
               )}
             </div>
             <div className={`overflow-hidden transition-all duration-200 ${collapsedCats.has(cat) ? "max-h-0 opacity-0" : "max-h-[500px] opacity-100"}`}>
-              {chs.map((c: any) => (
-                <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} updateChannel={updateChannel} />
+              {chs.map((c: any, idx: number) => (
+                <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} updateChannel={updateChannel}
+                  index={idx} onMove={async (draggedId: string, before: boolean) => {
+                    const newPos = before ? idx : idx + 1;
+                    updateChannel.mutate({ id: draggedId, category: cat, position: newPos });
+                    toast.success("Canal movido");
+                  }} />
               ))}
             </div>
             {editingCat === cat && (
@@ -426,7 +436,7 @@ function channelMeta(type: string) {
   }
 }
 
-function ChannelItem({ c, serverId, loc, canManage, deleteChannel, updateChannel }: any) {
+function ChannelItem({ c, serverId, loc, canManage, deleteChannel, updateChannel, index, onMove }: any) {
   const active = loc.pathname === `/app/servers/${serverId}/${c.id}`;
   const { icon: Icon, color: iconColor } = channelMeta(c.type);
   const [editOpen, setEditOpen] = useState(false);
@@ -450,12 +460,27 @@ function ChannelItem({ c, serverId, loc, canManage, deleteChannel, updateChannel
   return (
     <div className={`${active ? "relative " : ""}group`}>
       {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />}
-      <Link to="/app/servers/$serverId/$channelId" params={{ serverId, channelId: c.id }}
+      <div
         draggable={canManage}
         onDragStart={(e) => { e.dataTransfer?.setData("text/plain", c.id); e.dataTransfer!.effectAllowed = "move"; }}
+        onDragOver={(e) => { e.preventDefault(); }}
+        onDrop={(e) => {
+          e.preventDefault();
+          const draggedId = e.dataTransfer?.getData("text/plain");
+          if (!draggedId || draggedId === c.id) return;
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          const before = e.clientY < rect.top + rect.height / 2;
+          if (typeof onMove === "function") onMove(draggedId, before);
+        }}
         className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm flex-1 min-w-0 transition-all ml-1 ${
           active ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm" : "text-muted-foreground/80 hover:bg-sidebar-accent/50 hover:text-foreground"
         }`}>
+        <Link to="/app/servers/$serverId/$channelId" params={{ serverId, channelId: c.id }} className="flex-1 min-w-0">
+          <>
+            <Icon className={`h-4 w-4 shrink-0 ${iconColor} ${active ? "drop-shadow-sm" : ""}`} />
+            <span className="truncate text-[13px]">{c.name}</span>
+          </>
+        </Link>
         <Icon className={`h-4 w-4 shrink-0 ${iconColor} ${active ? "drop-shadow-sm" : ""}`} />
         <span className="truncate text-[13px]">{c.name}</span>
       </Link>
