@@ -128,6 +128,7 @@ BEGIN
     WHERE id = NEW.user_id;
   RETURN NEW;
 END; $$;
+DROP TRIGGER IF EXISTS trg_sync_profile_plan ON public.subscriptions;
 CREATE TRIGGER trg_sync_profile_plan AFTER INSERT OR UPDATE ON public.subscriptions
   FOR EACH ROW EXECUTE FUNCTION public.sync_profile_plan();
 
@@ -503,6 +504,6 @@ CREATE POLICY "storage_auth_delete_own" ON storage.objects FOR DELETE TO authent
 );
 
 -- ============ REALTIME ============
-ALTER PUBLICATION supabase_realtime ADD TABLE IF NOT EXISTS public.messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE IF NOT EXISTS public.message_reactions;
-ALTER PUBLICATION supabase_realtime ADD TABLE IF NOT EXISTS public.server_members;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.messages; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.message_reactions; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.server_members; EXCEPTION WHEN duplicate_object THEN NULL; END $$;

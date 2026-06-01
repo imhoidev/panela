@@ -496,13 +496,14 @@ function ChannelView() {
                       <div className="flex-1 h-px bg-border/40" />
                     </div>
                   )}
-                  <MessageBubble
+                    <MessageBubble
                     m={m} sameAuthor={sameAuthor} replied={replied} myRx={myRx}
                     editing={editing} editText={editText} setEditText={setEditText}
                     setEditing={setEditing} saveEdit={saveEdit}
                     react={react} setReplyTo={setReplyTo} removeMsg={removeMsg}
                     user={user} serverId={serverId} navigate={navigate}
                     channelId={channelId} relativeTime={relativeTime} formatTime={formatTime}
+                    roleCache={memberRolesCache.current}
                   />
                 </div>
               );
@@ -610,7 +611,7 @@ function ChannelView() {
 
 function MessageBubble({
   m, sameAuthor, replied, myRx, editing, editText, setEditText,
-  setEditing, saveEdit, react, setReplyTo, removeMsg, user, serverId, navigate, channelId, relativeTime, formatTime,
+  setEditing, saveEdit, react, setReplyTo, removeMsg, user, serverId, navigate, channelId, relativeTime, formatTime, roleCache,
 }: any) {
   return (
     <div className={`group relative flex gap-2.5 px-2 py-1 rounded-lg hover:bg-accent/15 transition-colors ${sameAuthor ? "pl-[3.25rem]" : ""}`}>
@@ -635,8 +636,8 @@ function MessageBubble({
         {!sameAuthor && (
           <div className="flex items-baseline gap-1.5 flex-wrap">
             {m.author ? <UsernameBadge profile={m.author as any} /> : <span className="text-sm text-muted-foreground">…</span>}
-            {(() => {
-              const roles = memberRolesCache.current.get(m.author_id) ?? [];
+              {(() => {
+              const roles = roleCache.get(m.author_id) ?? [];
               const top = roles.sort((a, b) => (b as any).level - (a as any).level)?.[0];
               if (!top) return null;
               if (top.gif_tag_url) return <img src={top.gif_tag_url} alt="" className="h-4 w-4 rounded-sm object-cover shrink-0" title={top.name} />;
