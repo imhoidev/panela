@@ -189,7 +189,7 @@ function ServerLayout() {
                 {server.privacy === "private" ? <Lock className="h-2.5 w-2.5" /> : <Globe className="h-2.5 w-2.5" />}
                 {server.member_count} {server.member_count === 1 ? "membro" : "membros"}
                 <span className="text-muted-foreground/30 mx-0.5">·</span>
-                {onlineCount} online
+                {onlineCount > 0 ? `${onlineCount} online` : "nenhum online"}
               </span>
               {server.slug && <span className="text-[10px] text-muted-foreground/40">· @{server.slug}</span>}
             </div>
@@ -204,6 +204,7 @@ function ServerLayout() {
           open={open} setOpen={setOpen} newName={newName} setNewName={setNewName}
           newType={newType} setNewType={setNewType} newCategory={newCategory} setNewCategory={setNewCategory}
           addChannel={addChannel} deleteChannel={deleteChannel}
+          updateChannel={updateChannel}
         />
         <ServerToolbar
           canManage={canManage} isOwner={isOwner} serverId={serverId} server={server}
@@ -309,7 +310,35 @@ function ServerLayout() {
   );
 }
 
-function ChannelsList({ categories, uncategorized, collapsedCats, toggleCat, channels, serverId, loc, canManage, open, setOpen, newName, setNewName, newType, setNewType, newCategory, setNewCategory, addChannel, deleteChannel }: any) {
+function ChannelsList({ categories, uncategorized, collapsedCats, toggleCat, channels, serverId, loc, canManage, open, setOpen, newName, setNewName, newType, setNewType, newCategory, setNewCategory, addChannel, deleteChannel, updateChannel }: any) {
+  const [editingCat, setEditingCat] = useState<string | null>(null);
+  const [editingCatVal, setEditingCatVal] = useState("");
+
+  async function renameCategory(oldName: string, newName: string) {
+    if (!oldName) return; // sanity
+    const { error } = await supabase.from("channels").update({ category: newName || null }).eq("server_id", serverId).eq("category", oldName);
+    if (error) return toast.error(error.message);
+    toast.success("Categoria atualizada");
+  }
+
+  async function deleteCategory(name: string) {
+    if (!name) return;
+    const { error } = await supabase.from("channels").update({ category: null }).eq("server_id", serverId).eq("category", name);
+    if (error) return toast.error(error.message);
+    toast.success("Categoria removida");
+  }
+
+  function onDropToCategory(e: React.DragEvent, cat: string, chs: any[]) {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain");
+    if (!id) return;
+    // Move channel to target category, append to end
+    updateChannel.mutate({ id, category: cat, position: chs.length });
+    toast.success("Canal movido");
+  }
+
+  function onDragOverCat(e: React.DragEvent) { e.preventDefault(); }
+
   return (
     <ScrollArea className="flex-1">
       <div className="p-2 space-y-0.5">
@@ -347,21 +376,38 @@ function ChannelsList({ categories, uncategorized, collapsedCats, toggleCat, cha
           )}
         </div>
         {uncategorized.map((c: any) => (
-          <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} />
+          <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} updateChannel={updateChannel} />
         ))}
         {[...categories.entries()].map(([cat, chs]) => (
-          <div key={cat}>
-            <button onClick={() => toggleCat(cat)}
-              className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/60 hover:text-foreground/80 transition-colors rounded-md hover:bg-sidebar-accent/30">
-              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${collapsedCats.has(cat) ? "-rotate-90" : ""}`} />
-              <span className="font-semibold">{cat}</span>
-              <span className="ml-auto text-[9px] text-muted-foreground/40 font-mono">{chs.length}</span>
-            </button>
+          <div key={cat} onDragOver={onDragOverCat} onDrop={(e) => onDropToCategory(e, cat, chs)}>
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5">
+              <button onClick={() => toggleCat(cat)}
+                className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/60 hover:text-foreground/80 transition-colors rounded-md hover:bg-sidebar-accent/30">
+                <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${collapsedCats.has(cat) ? "-rotate-90" : ""}`} />
+                <span className="font-semibold">{cat}</span>
+                <span className="ml-auto text-[9px] text-muted-foreground/40 font-mono">{chs.length}</span>
+              </button>
+              {canManage && (
+                <div className="ml-2 flex items-center gap-1">
+                  <button onClick={() => { setEditingCat(cat); setEditingCatVal(cat); }} className="p-1 text-muted-foreground/40 hover:text-foreground" title="Editar categoria"><Pencil className="h-3 w-3" /></button>
+                  <button onClick={() => deleteCategory(cat)} className="p-1 text-muted-foreground/40 hover:text-destructive" title="Remover categoria"><X className="h-3 w-3" /></button>
+                </div>
+              )}
+            </div>
             <div className={`overflow-hidden transition-all duration-200 ${collapsedCats.has(cat) ? "max-h-0 opacity-0" : "max-h-[500px] opacity-100"}`}>
               {chs.map((c: any) => (
-                <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} />
+                <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} updateChannel={updateChannel} />
               ))}
             </div>
+            {editingCat === cat && (
+              <div className="px-3 py-2">
+                <div className="flex gap-2">
+                  <Input value={editingCatVal} onChange={(e) => setEditingCatVal(e.target.value)} className="h-8" />
+                  <Button onClick={async () => { await renameCategory(cat, editingCatVal.trim()); setEditingCat(null); }} className="h-8">Salvar</Button>
+                  <Button variant="outline" onClick={() => setEditingCat(null)} className="h-8">Cancelar</Button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
         {channels.length === 0 && <p className="text-[11px] text-muted-foreground/40 text-center py-8">Nenhum canal ainda</p>}
@@ -380,7 +426,7 @@ function channelMeta(type: string) {
   }
 }
 
-function ChannelItem({ c, serverId, loc, canManage, deleteChannel }: any) {
+function ChannelItem({ c, serverId, loc, canManage, deleteChannel, updateChannel }: any) {
   const active = loc.pathname === `/app/servers/${serverId}/${c.id}`;
   const { icon: Icon, color: iconColor } = channelMeta(c.type);
   const [editOpen, setEditOpen] = useState(false);
@@ -405,6 +451,8 @@ function ChannelItem({ c, serverId, loc, canManage, deleteChannel }: any) {
     <div className={`${active ? "relative " : ""}group`}>
       {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-primary" />}
       <Link to="/app/servers/$serverId/$channelId" params={{ serverId, channelId: c.id }}
+        draggable={canManage}
+        onDragStart={(e) => { e.dataTransfer?.setData("text/plain", c.id); e.dataTransfer!.effectAllowed = "move"; }}
         className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm flex-1 min-w-0 transition-all ml-1 ${
           active ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm" : "text-muted-foreground/80 hover:bg-sidebar-accent/50 hover:text-foreground"
         }`}>

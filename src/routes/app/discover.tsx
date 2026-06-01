@@ -66,6 +66,7 @@ function Discover() {
             const joined = myIds.has(s.id);
             return (
               <Card key={s.id} className="p-5 flex flex-col">
+                {s.banner_url ? <img src={s.banner_url} alt="banner" className="h-28 w-full object-cover rounded-md mb-3" /> : null}
                 <div className="flex items-center gap-3">
                   {s.icon_url
                     ? <img src={s.icon_url} className="h-12 w-12 rounded-xl object-cover" alt="" />

@@ -78,6 +78,16 @@
 ### Stickers
 - [x] `sticker_packs` + `stickers` tables (já existiam no schema)
 - [x] **StickerPicker** — busca stickers do servidor, grid 4-column
+
+## 🚀 Roadmap: v3.0.5 (Prioridade)
+
+- Fix urgente: corrigir "0 online" nos cabeçalhos de grupos e garantir contagem via `presence` (socket auth já aplicado).
+- UI: Separadores de categoria (titled separators) — editar, renomear, remover categorias.
+- UX: Drag & drop de canais entre categorias e reordenação (persistir `position` + `category`).
+- Discover: mostrar `banner` nos cards públicos.
+- Backend: endpoint/rota para bulk update de posições (ou usar mutation via Supabase RPC).
+- Iteração: permissões por categoria e otimizações de render (virtualização quando categoria grande).
+
 - [x] Inserção como Markdown `![sticker](url)`
 
 ### Convites
