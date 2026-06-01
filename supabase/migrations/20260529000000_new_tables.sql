@@ -1,9 +1,6 @@
 -- =========================================================================
--- PANELA — Novas tabelas: invites, bans, reports, xp, logs, theme_config
+-- PANELA — Novas tabelas: invites, bans, reports, xp, logs
 -- =========================================================================
-
--- ============ THEME CONFIG on servers ============
-ALTER TABLE public.servers ADD COLUMN IF NOT EXISTS theme_config JSONB DEFAULT '{}'::jsonb;
 
 -- ============ INVITES ============
 CREATE TABLE IF NOT EXISTS public.invites (

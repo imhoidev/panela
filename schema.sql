@@ -245,6 +245,63 @@ DROP POLICY IF EXISTS "members_delete_self_or_mod" ON public.server_members;
 CREATE POLICY "members_delete_self_or_mod" ON public.server_members FOR DELETE TO authenticated
   USING (user_id = auth.uid() OR public.server_member_level(server_id, auth.uid()) >= 90);
 
+-- ============ SERVER BANS & MUTES ============
+CREATE TABLE IF NOT EXISTS public.server_bans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  server_id UUID NOT NULL REFERENCES public.servers(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  banned_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  reason TEXT,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(server_id, user_id)
+);
+GRANT SELECT, INSERT, DELETE ON public.server_bans TO authenticated;
+GRANT ALL ON public.server_bans TO service_role;
+ALTER TABLE public.server_bans ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "bans_select_member" ON public.server_bans;
+CREATE POLICY "bans_select_member" ON public.server_bans FOR SELECT TO authenticated
+  USING (public.is_server_member(server_id, auth.uid()));
+DROP POLICY IF EXISTS "bans_manage_mod" ON public.server_bans;
+CREATE POLICY "bans_manage_mod" ON public.server_bans FOR INSERT TO authenticated
+  WITH CHECK (public.server_member_level(server_id, auth.uid()) >= 70);
+DROP POLICY IF EXISTS "bans_delete_mod" ON public.server_bans;
+CREATE POLICY "bans_delete_mod" ON public.server_bans FOR DELETE TO authenticated
+  USING (public.server_member_level(server_id, auth.uid()) >= 70);
+
+CREATE TABLE IF NOT EXISTS public.server_mutes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  server_id UUID NOT NULL REFERENCES public.servers(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  muted_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  reason TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ,
+  UNIQUE(server_id, user_id)
+);
+GRANT SELECT, INSERT, DELETE ON public.server_mutes TO authenticated;
+GRANT ALL ON public.server_mutes TO service_role;
+ALTER TABLE public.server_mutes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "mutes_select_member" ON public.server_mutes;
+CREATE POLICY "mutes_select_member" ON public.server_mutes FOR SELECT TO authenticated
+  USING (public.is_server_member(server_id, auth.uid()));
+DROP POLICY IF EXISTS "mutes_manage_mod" ON public.server_mutes;
+CREATE POLICY "mutes_manage_mod" ON public.server_mutes FOR INSERT TO authenticated
+  WITH CHECK (public.server_member_level(server_id, auth.uid()) >= 70);
+DROP POLICY IF EXISTS "mutes_delete_mod" ON public.server_mutes;
+CREATE POLICY "mutes_delete_mod" ON public.server_mutes FOR DELETE TO authenticated
+  USING (public.server_member_level(server_id, auth.uid()) >= 70);
+
+-- helper: check if user is muted in a server
+CREATE OR REPLACE FUNCTION public.is_muted(_server UUID, _user UUID)
+RETURNS BOOLEAN LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.server_mutes
+    WHERE server_id = _server AND user_id = _user
+      AND (expires_at IS NULL OR expires_at > now())
+  )
+$$;
+
 -- ============ SERVER ROLES ============
 CREATE TABLE IF NOT EXISTS public.server_roles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -334,7 +391,8 @@ DROP POLICY IF EXISTS "msg_insert_member" ON public.messages;
 CREATE POLICY "msg_insert_member" ON public.messages FOR INSERT TO authenticated
   WITH CHECK (author_id = auth.uid() AND
               EXISTS (SELECT 1 FROM public.channels c WHERE c.id = channel_id
-                      AND public.is_server_member(c.server_id, auth.uid())));
+                      AND public.is_server_member(c.server_id, auth.uid())
+                      AND NOT public.is_muted(c.server_id, auth.uid())));
 DROP POLICY IF EXISTS "msg_update_author" ON public.messages;
 CREATE POLICY "msg_update_author" ON public.messages FOR UPDATE TO authenticated
   USING (author_id = auth.uid());
@@ -507,3 +565,11 @@ CREATE POLICY "storage_auth_delete_own" ON storage.objects FOR DELETE TO authent
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.messages; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.message_reactions; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.server_members; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.server_bans; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.server_mutes; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Correct member_count for any existing servers that got DOUBLE-COUNTED
+-- (the old DEFAULT 1 + bump trigger on INSERT = 2 for fresh servers)
+UPDATE public.servers s
+SET member_count = (SELECT count(*) FROM public.server_members WHERE server_id = s.id)
+WHERE member_count != (SELECT count(*) FROM public.server_members WHERE server_id = s.id);

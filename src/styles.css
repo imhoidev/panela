@@ -194,9 +194,7 @@
 .font-retro-body { font-family: var(--font-retro); }
 .font-retro-body .prose { font-family: var(--font-retro); }
 
-/* Server theme variables (set via JS on .server-theme) */
-.server-theme { --primary: var(--server-accent); --background: var(--server-bg); }
-.server-theme.light { --background: oklch(0.95 0.01 80); --foreground: oklch(0.15 0.02 80); }
+
 
 /* ============ Responsive utilities ============ */
 .hide-on-desktop { display: none !important; }

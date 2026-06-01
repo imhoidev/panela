@@ -20,8 +20,7 @@ import { ServerMembersTab } from "@/components/ServerMembersTab";
 import { ServerChannelsTab } from "@/components/ServerChannelsTab";
 import { ServerEventsDialog } from "@/components/ServerEvents";
 import { InvitesDialog } from "@/components/Invites";
-import { ThemeDialog } from "@/components/ThemeConfig";
-import { BanDialog } from "@/components/ModPanel";
+import { ModeracaoDialog } from "@/components/ModPanel";
 import { LevelBadge } from "@/components/LevelBadge";
 import { StatusDot } from "@/components/PresenceStatus";
 
@@ -36,6 +35,7 @@ import { slugify, isValidSlug } from "@/lib/slug";
 /* ─── Context for child routes ─── */
 type ServerCtx = {
   server: any;
+  presence: Map<string, string>;
   channels: any[];
   categories: Map<string, any[]>;
   uncategorized: any[];
@@ -234,7 +234,7 @@ function ServerLayout() {
   };
 
   const ctx: ServerCtx = {
-    server, channels, categories, uncategorized, collapsedCats, toggleCat,
+    server, presence, channels, categories, uncategorized, collapsedCats, toggleCat,
     mobileChannelsOpen, setMobileChannelsOpen, memberLevel, canManage, isOwner,
     addChannel: () => addChannel(), deleteChannel: (id) => deleteChannel(id),
     open, setOpen, newName, setNewName, newType, setNewType, newCategory, setNewCategory,
@@ -567,8 +567,7 @@ function ServerToolbar({ canManage, isOwner, serverId, server, leave, settingsOp
         <div className="p-2 flex flex-wrap gap-1 border-b border-sidebar-border bg-sidebar/50">
           <ServerEventsDialog serverId={serverId} canManage={canManage} />
           <InvitesDialog serverId={serverId} canManage={canManage} />
-          <ThemeDialog serverId={serverId} server={server} canManage={canManage} />
-          <BanDialog serverId={serverId} canManage={canManage} />
+          <ModeracaoDialog serverId={serverId} canManage={canManage} />
         </div>
       )}
       <div className="flex items-center px-1.5 py-1.5">

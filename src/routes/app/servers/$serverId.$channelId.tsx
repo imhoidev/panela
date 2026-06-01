@@ -76,7 +76,6 @@ function ChannelView() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [typing, setTyping] = useState<Record<string, { name: string; t: number }>>({});
-  const [presence, setPresence] = useState<Map<string, string>>(new Map());
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [replyTo, setReplyTo] = useState<Msg | null>(null);
@@ -272,6 +271,9 @@ function ChannelView() {
     const { data, error } = await supabase.from("messages").insert({
       channel_id: channelId, author_id: user.id, content, reply_to: reply,
     }).select().maybeSingle();
+    if (error?.message?.includes("is_muted") || error?.code === "42501") {
+      setSending(false); return toast.error("Você está silenciado neste servidor.");
+    }
     if (!error && data) {
       const m = data as Msg;
       knownIds.current.add(m.id);
@@ -323,7 +325,7 @@ function ChannelView() {
   const isAnnouncement = channel.type === "announcement";
   const isForum = channel.type === "forum";
   const canPost = ctx?.canManage || ctx?.memberLevel >= 60 || (!isRules && !isAnnouncement);
-  const onlineCount = Array.from(presence.values()).filter((s) => s !== "offline").length;
+  const onlineCount = Array.from((ctx?.presence ?? new Map()).values()).filter((s) => s !== "offline").length;
 
   function channelMeta(type: string) {
     switch (type) {
@@ -377,7 +379,7 @@ function ChannelView() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="p-0 w-[280px]">
-              <MemberList serverId={serverId} presence={presence} />
+              <MemberList serverId={serverId} presence={ctx?.presence ?? new Map()} />
             </SheetContent>
           </Sheet>
           <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground/70">
