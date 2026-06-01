@@ -74,14 +74,6 @@ function ServersIndex() {
         body: formData,
       });
     }
-    // Ensure owner is member (fallback if trigger doesn't fire)
-    await supabase.from("server_members").insert({
-      server_id: data.id, user_id: user.id, level: 99,
-    }).maybeSingle();
-    // Ensure a default text channel exists
-    await supabase.from("channels").insert({
-      server_id: data.id, name: "geral", type: "text", position: 0,
-    }).maybeSingle();
     setCreating(false);
     toast.success(`Servidor criado! @${data.slug}`);
     setOpen(false); setName(""); setSlug(""); setSlugTouched(false); setDescription("");

@@ -196,11 +196,11 @@ async function handleRequest(req, res) {
       const conversationId = parts.find((p) => p.name === "conversation_id")?.value;
       if (!filePart || !conversationId) { send(res, json({ error: "file and conversation_id required" }, 400)); return; }
       const bucket = "attachments";
-      const path = `dm/${u.id}/${Date.now()}-${filePart.filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const path = `${u.id}/dm/${Date.now()}-${filePart.filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
       const sbAuth = getAuthedClient(token);
-      const { error: upErr } = await sbAuth.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: false });
+      const { error: upErr } = await sbAdmin.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: false });
       if (upErr) { send(res, json({ error: upErr.message }, 500)); return; }
-      const { data: pub } = sbAuth.storage.from(bucket).getPublicUrl(path);
+      const { data: pub } = sbAdmin.storage.from(bucket).getPublicUrl(path);
       const { data: msg, error: msgErr } = await sbAuth.from("dm_messages").insert({
         conversation_id: conversationId, author_id: u.id, content: null,
         attachment_url: pub.publicUrl, attachment_type: filePart.contentType,
@@ -253,13 +253,13 @@ async function handleRequest(req, res) {
       const filePart = parts.find((p) => p.name === "file");
       const serverId = parts.find((p) => p.name === "server_id")?.value;
       if (!filePart || !serverId) { send(res, json({ error: "file and server_id required" }, 400)); return; }
-      const { data: member } = await sb.from("server_members").select("level").eq("server_id", serverId).eq("user_id", u.id).maybeSingle();
+      const { data: member } = await sbAdmin.from("server_members").select("level").eq("server_id", serverId).eq("user_id", u.id).maybeSingle();
       if (!member || member.level < 80) { send(res, json({ error: "Sem permissão" }, 403)); return; }
       const bucket = "server-icons";
       const path = `servers/${serverId}/${Date.now()}-${filePart.filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-      const { error: upErr } = await sb.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: true });
+      const { error: upErr } = await sbAdmin.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: true });
       if (upErr) { send(res, json({ error: upErr.message }, 500)); return; }
-      const { data: pub } = sb.storage.from(bucket).getPublicUrl(path);
+      const { data: pub } = sbAdmin.storage.from(bucket).getPublicUrl(path);
       send(res, json({ url: pub.publicUrl }));
       return;
     }
@@ -278,17 +278,17 @@ async function handleRequest(req, res) {
       const filePart = parts.find((p) => p.name === "file");
       const packId = parts.find((p) => p.name === "sticker_pack_id")?.value;
       if (!filePart || !packId) { send(res, json({ error: "file and sticker_pack_id required" }, 400)); return; }
-      const { data: pack } = await sb.from("sticker_packs").select("owner_id, server_id").eq("id", packId).maybeSingle();
+      const { data: pack } = await sbAdmin.from("sticker_packs").select("owner_id, server_id").eq("id", packId).maybeSingle();
       if (!pack) { send(res, json({ error: "Pack not found" }, 404)); return; }
       if (pack.owner_id !== u.id) {
-        const { data: member } = await sb.from("server_members").select("level").eq("server_id", pack.server_id).eq("user_id", u.id).maybeSingle();
+        const { data: member } = await sbAdmin.from("server_members").select("level").eq("server_id", pack.server_id).eq("user_id", u.id).maybeSingle();
         if (!member || member.level < 80) { send(res, json({ error: "Sem permissão" }, 403)); return; }
       }
       const bucket = "stickers";
       const path = `${packId}/${Date.now()}-${filePart.filename.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-      const { error: upErr } = await sb.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: true });
+      const { error: upErr } = await sbAdmin.storage.from(bucket).upload(path, Buffer.from(filePart.data, "binary"), { contentType: filePart.contentType, upsert: true });
       if (upErr) { send(res, json({ error: upErr.message }, 500)); return; }
-      const { data: pub } = sb.storage.from(bucket).getPublicUrl(path);
+      const { data: pub } = sbAdmin.storage.from(bucket).getPublicUrl(path);
       send(res, json({ url: pub.publicUrl }));
       return;
     }

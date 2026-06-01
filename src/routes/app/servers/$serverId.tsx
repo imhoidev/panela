@@ -654,35 +654,42 @@ function ServerSettingsPanel({
   const [editDesc, setEditDesc] = useState(server.description ?? "");
   const [editPrivacy, setEditPrivacy] = useState(server.privacy || "public");
   const [saving, setSaving] = useState(false);
+  const [changingSlug, setChangingSlug] = useState(false);
+  const [newSlug, setNewSlug] = useState(server.slug ?? "");
   const [uploadingIcon, setUploadingIcon] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [memberSort, setMemberSort] = useState("level");
   const [allRoles, setAllRoles] = useState<any[]>([]);
   const [memberRoleMap, setMemberRoleMap] = useState<Map<string, string[]>>(new Map());
   const fileRef = useRef<HTMLInputElement>(null);
+  const [channels, setChannels] = useState<any[]>([]);
+  const [editingChannel, setEditingChannel] = useState<any | null>(null);
+  const [channelEditName, setChannelEditName] = useState("");
+  const [channelEditTopic, setChannelEditTopic] = useState("");
+  const [channelEditDesc, setChannelEditDesc] = useState("");
+  const [channelEditMinLevel, setChannelEditMinLevel] = useState(1);
+  const [channelEditCategory, setChannelEditCategory] = useState("");
 
   useEffect(() => {
-    setEditName(server.name);
-    setEditDesc(server.description ?? "");
-    setEditPrivacy(server.privacy || "public");
-  }, [server.name, server.description, server.privacy]);
+    setEditName(server.name); setEditDesc(server.description ?? "");
+    setEditPrivacy(server.privacy || "public"); setNewSlug(server.slug ?? "");
+  }, [server.name, server.description, server.privacy, server.slug]);
 
   useEffect(() => {
-    if (tab !== "members" && tab !== "roles") return;
-    supabase.from("server_roles").select("*").eq("server_id", serverId).order("level", { ascending: false }).then(({ data }) => {
-      setAllRoles(data ?? []);
-    });
-    supabase.from("server_member_roles").select("member_id, role_id, server_members!inner(user_id)").then(({ data }) => {
-      const map = new Map<string, string[]>();
-      (data ?? []).forEach((mr: any) => {
-        const uid = mr.server_members?.user_id;
-        if (!uid) return;
-        const ids = map.get(uid) ?? [];
-        ids.push(mr.role_id);
-        map.set(uid, ids);
+    if (tab === "members" || tab === "roles") {
+      supabase.from("server_roles").select("*").eq("server_id", serverId).order("level", { ascending: false }).then(({ data }) => setAllRoles(data ?? []));
+      supabase.from("server_member_roles").select("member_id, role_id, server_members!inner(user_id)").then(({ data }) => {
+        const map = new Map<string, string[]>();
+        (data ?? []).forEach((mr: any) => {
+          const uid = mr.server_members?.user_id; if (!uid) return;
+          const ids = map.get(uid) ?? []; ids.push(mr.role_id); map.set(uid, ids);
+        });
+        setMemberRoleMap(map);
       });
-      setMemberRoleMap(map);
-    });
+    }
+    if (tab === "channels") {
+      supabase.from("channels").select("*").eq("server_id", serverId).order("position").then(({ data }) => setChannels(data ?? []));
+    }
   }, [tab, serverId]);
 
   async function saveSettings() {
@@ -695,6 +702,333 @@ function ServerSettingsPanel({
     toast.success("Servidor atualizado!");
     onServerUpdate({ ...server, name: editName.trim(), description: editDesc.trim() || null, privacy: editPrivacy });
   }
+
+  async function saveSlug() {
+    const s = newSlug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 32);
+    if (!s) return toast.error("Slug invalido");
+    setChangingSlug(true);
+    const { error } = await supabase.from("servers").update({ slug: s }).eq("id", serverId);
+    setChangingSlug(false);
+    if (error) { if ((error as any).code === "23505") return toast.error("Slug ja em uso."); return toast.error(error.message); }
+    toast.success("Slug atualizado!");
+    onServerUpdate({ ...server, slug: s });
+  }
+
+  async function uploadIcon(file: File) {
+    if (uploadingIcon) return; setUploadingIcon(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || "";
+      const formData = new FormData(); formData.append("file", file); formData.append("server_id", serverId);
+      const { data: sess } = await supabase.auth.getSession();
+      const res = await fetch(`${apiUrl}/api/upload-server-icon`, {
+        method: "POST", headers: { Authorization: `Bearer ${sess.session?.access_token}` }, body: formData,
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Upload falhou"); }
+      const { url } = await res.json();
+      await supabase.from("servers").update({ icon_url: url }).eq("id", serverId);
+      onServerUpdate({ ...server, icon_url: url }); toast.success("Icone atualizado!");
+    } catch (err: any) { toast.error(err.message); } finally { setUploadingIcon(false); }
+  }
+
+  async function deleteServer() {
+    if (!confirm("TEM CERTEZA? Esta acao e irreversivel.")) return;
+    if (!confirm("Serio mesmo? Confirme.")) return;
+    setDeleting(true); const { error } = await supabase.from("servers").delete().eq("id", serverId);
+    setDeleting(false); if (error) return toast.error(error.message);
+    toast.success("Servidor deletado."); router.navigate({ to: "/app/servers" });
+  }
+
+  async function saveChannel() {
+    if (!editingChannel) return;
+    const { error } = await supabase.from("channels").update({
+      name: channelEditName.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 32),
+      topic: channelEditTopic.trim() || null, description: channelEditDesc.trim() || null,
+      min_level: channelEditMinLevel, category: channelEditCategory.trim() || null,
+    }).eq("id", editingChannel.id);
+    if (error) return toast.error(error.message);
+    setEditingChannel(null); toast.success("Canal atualizado");
+    supabase.from("channels").select("*").eq("server_id", serverId).order("position").then(({ data }) => setChannels(data ?? []));
+  }
+
+  const sortedMembers = [...members].sort((a, b) => {
+    if (a.user_id === server?.owner_id) return -1; if (b.user_id === server?.owner_id) return 1;
+    if (memberSort === "online") {
+      const aOn = presence.get(a.user_id) != null && presence.get(a.user_id) !== "offline";
+      const bOn = presence.get(b.user_id) != null && presence.get(b.user_id) !== "offline";
+      if (aOn !== bOn) return aOn ? -1 : 1;
+    }
+    if (memberSort === "level" || memberSort === "online") return (b.level ?? 0) - (a.level ?? 0);
+    const na = a.profiles?.display_name || a.profiles?.username || "", nb = b.profiles?.display_name || b.profiles?.username || "";
+    return na.localeCompare(nb);
+  });
+  const filteredMembers = sortedMembers.filter((m: any) => {
+    if (!memberSearch) return true;
+    const p = m.profiles; return p?.username?.toLowerCase().includes(memberSearch.toLowerCase()) || p?.display_name?.toLowerCase().includes(memberSearch.toLowerCase());
+  });
+
+  return (
+    <Tabs value={tab} onValueChange={setTab} className="flex flex-col h-full">
+      <div className="p-4 md:p-5 pb-0">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="relative shrink-0">
+            {server.icon_url ? (
+              <img src={server.icon_url} className="h-9 w-9 rounded-xl object-cover ring-2 ring-border" alt="" />
+            ) : (
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary/30 to-primary/10 ring-2 ring-border grid place-items-center font-bold text-primary text-sm">{server.name[0]?.toUpperCase()}</div>
+            )}
+            {canManage && <>
+              <input type="file" ref={fileRef} className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadIcon(f); e.target.value = ""; }} />
+              <button onClick={() => fileRef.current?.click()} disabled={uploadingIcon}
+                className="absolute -bottom-1 -right-1 h-4.5 w-4.5 rounded-full bg-primary text-primary-foreground grid place-items-center text-[9px] border-2 border-background hover:scale-110 transition-transform disabled:opacity-50">
+                {uploadingIcon ? "..." : "✎"}</button>
+            </>}
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-sm truncate leading-tight">{server.name}</h3>
+            <p className="text-[10px] text-muted-foreground/60">{server.member_count} {server.member_count === 1 ? "membro" : "membros"} · {server.privacy === "private" ? "Privado" : "Publico"}</p>
+          </div>
+        </div>
+        <TabsList className="w-full h-8">
+          <TabsTrigger value="overview" className="text-xs gap-1"><Settings className="h-3 w-3" />Geral</TabsTrigger>
+          <TabsTrigger value="members" className="text-xs gap-1"><Users className="h-3 w-3" />Membros</TabsTrigger>
+          <TabsTrigger value="channels" className="text-xs gap-1"><Hash className="h-3 w-3" />Canais</TabsTrigger>
+          <TabsTrigger value="roles" className="text-xs gap-1"><Shield className="h-3 w-3" />Cargos</TabsTrigger>
+          <TabsTrigger value="stickers" className="text-xs gap-1"><Sticker className="h-3 w-3" />Figurinhas</TabsTrigger>
+        </TabsList>
+      </div>
+
+      <div className="flex-1 overflow-auto p-4 md:p-5 space-y-4">
+        {/* ═══ OVERVIEW ═══ */}
+        <TabsContent value="overview" className="mt-0 space-y-3">
+          {canManage && (
+            <div className="rounded-xl border border-border p-4 space-y-3 bg-accent/15">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Editar servidor</h4>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Nome</Label>
+                <Input value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={48} className="h-10 text-sm" placeholder="Nome do servidor" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Descricao</Label>
+                <Textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} maxLength={300} rows={3} className="text-sm resize-none" placeholder="Descricao do servidor..." />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Visibilidade</Label>
+                <div className="flex gap-2">
+                  {["public", "private"].map((v) => (
+                    <button key={v} type="button" onClick={() => setEditPrivacy(v)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border h-10 text-xs transition-all ${
+                        editPrivacy === v ? "border-primary bg-primary/10 text-primary font-medium" : "border-border text-muted-foreground hover:border-muted-foreground/30"
+                      }`}>
+                      {v === "public" ? <Globe className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                      {v === "public" ? "Publico" : "Privado"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <Button onClick={saveSettings} disabled={saving} className="w-full h-10 text-sm">{saving ? "Salvando..." : "Salvar alteracoes"}</Button>
+            </div>
+          )}
+
+          {isOwner && (
+            <div className="rounded-xl border border-border p-4 space-y-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Slug</h4>
+              <p className="text-xs text-muted-foreground/60">Link unico do servidor: panela.app/s/<span className="font-mono text-foreground/80">{newSlug || "..."}</span></p>
+              <div className="flex gap-2">
+                <Input value={newSlug} onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))} maxLength={32} placeholder="meu-servidor" className="h-9 text-sm font-mono flex-1" />
+                <Button onClick={saveSlug} disabled={changingSlug || !newSlug.trim() || newSlug === server.slug} size="sm" className="h-9">{changingSlug ? "..." : "Salvar"}</Button>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-border p-4 space-y-2.5">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Informacoes</h4>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+              <div><span className="text-muted-foreground/60">Criado em</span><p className="mt-0.5 text-muted-foreground/80">{new Date(server.created_at).toLocaleDateString("pt-BR")}</p></div>
+              <div><span className="text-muted-foreground/60">Membros</span><p className="mt-0.5 text-muted-foreground/80">{server.member_count}</p></div>
+              <div><span className="text-muted-foreground/60">ID</span><p className="font-mono text-[10px] truncate mt-0.5 text-muted-foreground/60">{serverId}</p></div>
+            </div>
+          </div>
+
+          {isOwner && (
+            <div className="rounded-xl border border-destructive/20 p-4 space-y-2.5 bg-destructive/5">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-destructive/80">Zona de Perigo</h4>
+              <p className="text-xs text-muted-foreground">Deletar o servidor remove todos os canais, mensagens e arquivos permanentemente.</p>
+              <Button variant="destructive" onClick={deleteServer} disabled={deleting} className="h-9 text-xs">
+                {deleting ? "Deletando..." : "Deletar servidor"}
+              </Button>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ═══ MEMBERS ═══ */}
+        <TabsContent value="members" className="mt-0 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="Buscar membros..." className="pl-8 h-9 text-sm" />
+            </div>
+            <select value={memberSort} onChange={(e) => setMemberSort(e.target.value)}
+              className="h-9 rounded-lg border border-border bg-background px-2 text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30">
+              <option value="level">Nivel</option> <option value="name">Nome</option> <option value="online">Online</option>
+            </select>
+          </div>
+          {filteredMembers.length === 0 ? (
+            <div className="flex flex-col items-center py-10 text-muted-foreground/60">
+              <Users className="h-7 w-7 mb-2 opacity-40" />
+              <p className="text-xs font-medium">{memberSearch ? "Ninguem encontrado" : "Nenhum membro"}</p>
+            </div>
+          ) : (
+            <ScrollArea className="h-[280px] -mx-1 px-1">
+              <div className="space-y-0.5">
+                {filteredMembers.map((m: any) => {
+                  const p = m.profiles; const status = presence.get(m.user_id); const online = status != null && status !== "offline";
+                  return (
+                    <div key={m.user_id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent/30 transition-colors group">
+                      <div className="relative shrink-0">
+                        <Avatar className="h-8 w-8 ring-1 ring-border/30">
+                          <AvatarImage src={p?.avatar_url ?? undefined} />
+                          <AvatarFallback className="text-[10px]">{p?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
+                        </Avatar>
+                        <span className={`absolute -bottom-px -right-px h-[9px] w-[9px] rounded-full border-[2px] border-card ${
+                          online ? (status === "idle" ? "bg-yellow-500" : status === "dnd" ? "bg-red-500" : "bg-emerald-500") : "bg-muted-foreground/30"
+                        }`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <p className="text-sm font-medium truncate">{p?.display_name || p?.username}</p>
+                          {m.user_id === server.owner_id && <Crown className="h-3 w-3 text-yellow-500 shrink-0" />}
+                          {(memberRoleMap.get(m.user_id) ?? []).map((rid) => {
+                            const r = allRoles.find((rl: any) => rl.id === rid); if (!r) return null;
+                            return (
+                              <span key={rid} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium leading-none"
+                                style={{ backgroundColor: r.color ? `${r.color}22` : undefined, color: r.color || undefined, border: `1px solid ${r.color ? `${r.color}44` : 'transparent'}` }}>
+                                {r.gif_tag_url && <img src={r.gif_tag_url} alt="" className="h-2.5 w-2.5 rounded-sm object-cover" />}
+                                {r.name}
+                              </span>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
+                          <span>@{p?.username}</span> <span className="text-muted-foreground/20">·</span>
+                          <span>Nv.{m.level}</span>
+                          {p?.status_text && <><span className="text-muted-foreground/20">·</span><span className="truncate italic max-w-[80px]">&ldquo;{p.status_text}&rdquo;</span></>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {canManage && m.user_id !== server.owner_id && allRoles.length > 0 && (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground/40 hover:text-foreground hover:bg-accent/50">
+                                <Shield className="h-3.5 w-3.5" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" side="left" className="w-52 p-2">
+                              <p className="text-xs font-medium text-muted-foreground mb-1.5 px-1">Atribuir cargos</p>
+                              <div className="space-y-0.5 max-h-44 overflow-y-auto">
+                                {allRoles.map((r: any) => {
+                                  const has = (memberRoleMap.get(m.user_id) ?? []).includes(r.id);
+                                  return (
+                                    <label key={r.id} className="flex items-center gap-2 px-1 py-1.5 rounded hover:bg-accent cursor-pointer text-xs"
+                                      onClick={async () => {
+                                        if (has) {
+                                          await supabase.from("server_member_roles").delete().eq("member_id", m.id).eq("role_id", r.id);
+                                          const nm = new Map(memberRoleMap); nm.set(m.user_id, (nm.get(m.user_id) ?? []).filter((rid) => rid !== r.id)); setMemberRoleMap(nm);
+                                        } else {
+                                          await supabase.from("server_member_roles").insert({ member_id: m.id, role_id: r.id });
+                                          const nm = new Map(memberRoleMap); nm.set(m.user_id, [...(nm.get(m.user_id) ?? []), r.id]); setMemberRoleMap(nm);
+                                        }
+                                      }}>
+                                      <div className={`h-3 w-3 rounded border flex items-center justify-center ${has ? "bg-primary border-primary" : "border-muted-foreground/30"}`}>
+                                        {has && <Check className="h-2 w-2 text-primary-foreground" />}
+                                      </div>
+                                      {r.color && <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: r.color }} />}
+                                      <span className="truncate">{r.name}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                        <LevelBadge xp={m.xp ?? 0} size="sm" />
+                        {canKick && m.user_id !== server.owner_id && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 shrink-0 opacity-0 group-hover:opacity-100"
+                            onClick={() => kickMember(m.user_id)} title="Remover">
+                            <UserMinus className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          )}
+        </TabsContent>
+
+        {/* ═══ CHANNELS ═══ */}
+        <TabsContent value="channels" className="mt-0 space-y-3">
+          <div className="space-y-1">
+            {channels.length === 0 ? (
+              <p className="text-xs text-muted-foreground/60 text-center py-6">Nenhum canal.</p>
+            ) : (
+              <ScrollArea className="h-[280px] -mx-1 px-1">
+                <div className="space-y-0.5">
+                  {channels.map((c: any) => {
+                    const { icon: ChanIcon, color: chanColor } = channelMeta(c.type);
+                    return (
+                      <div key={c.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-accent/30 transition-colors group">
+                        <ChanIcon className={`h-4 w-4 shrink-0 ${chanColor}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium truncate">{c.name}</span>
+                            {c.category && <span className="text-[10px] text-muted-foreground/40">{c.category}</span>}
+                          </div>
+                          {c.topic && <p className="text-[10px] text-muted-foreground/60 truncate">{c.topic}</p>}
+                        </div>
+                        {canManage && (
+                          <button onClick={() => { setEditingChannel(c); setChannelEditName(c.name); setChannelEditTopic(c.topic ?? ""); setChannelEditDesc(c.description ?? ""); setChannelEditMinLevel(c.min_level ?? 1); setChannelEditCategory(c.category ?? ""); }}
+                            className="p-1 text-muted-foreground/30 hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"><Pencil className="h-3 w-3" /></button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
+          <ResponsiveDialog open={!!editingChannel} onOpenChange={(v) => { if (!v) setEditingChannel(null); }} title="Editar canal" className="max-w-md">
+            {editingChannel && (
+              <div className="space-y-3">
+                <div className="space-y-1"><Label className="text-xs">Nome</Label><Input value={channelEditName} onChange={(e) => setChannelEditName(e.target.value)} className="h-9 text-sm" maxLength={32} /></div>
+                <div className="space-y-1"><Label className="text-xs">Topico</Label><Input value={channelEditTopic} onChange={(e) => setChannelEditTopic(e.target.value)} className="h-9 text-sm" maxLength={128} placeholder="Assunto do canal..." /></div>
+                <div className="space-y-1"><Label className="text-xs">Descricao</Label><Input value={channelEditDesc} onChange={(e) => setChannelEditDesc(e.target.value)} className="h-9 text-sm" maxLength={300} placeholder="Descricao..." /></div>
+                <div className="space-y-1"><Label className="text-xs">Categoria</Label><Input value={channelEditCategory} onChange={(e) => setChannelEditCategory(e.target.value)} className="h-9 text-sm" placeholder="ex: Geral, Voz..." /></div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Nivel minimo: {channelEditMinLevel}</Label>
+                  <input type="range" min={1} max={99} value={channelEditMinLevel} onChange={(e) => setChannelEditMinLevel(Number(e.target.value))} className="w-full accent-primary" />
+                </div>
+                <Button onClick={saveChannel} className="w-full h-9 text-sm">Salvar</Button>
+              </div>
+            )}
+          </ResponsiveDialog>
+        </TabsContent>
+
+        {/* ═══ ROLES ═══ */}
+        <TabsContent value="roles" className="mt-0 space-y-3">
+          <p className="text-xs text-muted-foreground/60">Cargos definem permissoes, cores e badges visuais.</p>
+          <ServerRoles serverId={serverId} canManage={canManage} />
+        </TabsContent>
+
+        {/* ═══ STICKERS ═══ */}
+        <TabsContent value="stickers" className="mt-0 space-y-3">
+          <p className="text-xs text-muted-foreground/60">Crie packs de figurinhas para o servidor.</p>
+          <ServerStickers serverId={serverId} canManage={canManage} />
+        </TabsContent>
+      </div>
+    </Tabs>
+  );
+}
 
   async function uploadIcon(file: File) {
     if (uploadingIcon) return;

@@ -139,6 +139,23 @@ CREATE TABLE public.servers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Auto-add owner as member + default channel on server creation
+CREATE OR REPLACE FUNCTION public.add_owner_as_member()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  INSERT INTO public.server_members (server_id, user_id, level)
+    VALUES (NEW.id, NEW.owner_id, 99)
+    ON CONFLICT DO NOTHING;
+  INSERT INTO public.channels (server_id, name, type, position)
+    VALUES (NEW.id, 'geral', 'text', 0)
+    ON CONFLICT DO NOTHING;
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS servers_after_insert ON public.servers;
+CREATE TRIGGER servers_after_insert AFTER INSERT ON public.servers
+  FOR EACH ROW EXECUTE FUNCTION public.add_owner_as_member();
 GRANT SELECT ON public.servers TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.servers TO authenticated;
 GRANT ALL ON public.servers TO service_role;
@@ -198,9 +215,15 @@ CREATE POLICY "servers_delete_owner" ON public.servers FOR DELETE TO authenticat
 CREATE POLICY "members_select_member" ON public.server_members FOR SELECT TO authenticated
   USING (public.is_server_member(server_id, auth.uid()) OR
          EXISTS (SELECT 1 FROM public.servers s WHERE s.id = server_id AND s.privacy = 'public'));
-CREATE POLICY "members_insert_self_public" ON public.server_members FOR INSERT TO authenticated
-  WITH CHECK (user_id = auth.uid() AND
-              EXISTS (SELECT 1 FROM public.servers s WHERE s.id = server_id AND s.privacy = 'public'));
+CREATE POLICY "members_insert_self" ON public.server_members FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid() AND (
+    EXISTS (SELECT 1 FROM public.servers s WHERE s.id = server_id AND s.privacy = 'public')
+    OR
+    EXISTS (SELECT 1 FROM public.servers s WHERE s.id = server_id AND s.owner_id = auth.uid())
+  ));
+CREATE POLICY "members_insert_invite_mod" ON public.server_members FOR INSERT TO authenticated
+  WITH CHECK (user_id != auth.uid() AND
+    public.server_member_level(server_id, auth.uid()) >= 80);
 CREATE POLICY "members_delete_self_or_mod" ON public.server_members FOR DELETE TO authenticated
   USING (user_id = auth.uid() OR public.server_member_level(server_id, auth.uid()) >= 90);
 
@@ -252,7 +275,8 @@ CREATE TABLE public.channels (
   min_level INTEGER DEFAULT 1,
   min_age INTEGER,
   expires_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(server_id, name)
 );
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.channels TO authenticated;
 GRANT ALL ON public.channels TO service_role;
