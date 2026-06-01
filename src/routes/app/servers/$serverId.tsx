@@ -22,7 +22,7 @@ import { InvitesDialog } from "@/components/Invites";
 import { ModeracaoDialog } from "@/components/ModPanel";
 import {
   useServerDetails, useServerChannels, useMemberLevel, useServerMembers,
-  useCreateChannel, useDeleteChannel, useKickMember,
+  useCreateChannel, useDeleteChannel, useKickMember, useUpdateChannel,
   useServerRealtime, usePresenceChannel,
 } from "@/hooks/servers";
 import {
