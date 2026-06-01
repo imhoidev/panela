@@ -23,8 +23,10 @@ export function ServerOverviewTab({
   const [editPrivacy, setEditPrivacy] = useState(server.privacy || "public");
   const [newSlug, setNewSlug] = useState(server.slug ?? "");
   const [uploadingIcon, setUploadingIcon] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const bannerRef = useRef<HTMLInputElement>(null);
   const updateServer = useUpdateServer(serverId);
   const deleteServer = useDeleteServer(serverId);
 
@@ -61,6 +63,32 @@ export function ServerOverviewTab({
     if (file && file.type.startsWith("image/")) uploadIcon(file);
   }, [serverId]);
 
+  async function uploadBanner(file: File) {
+    if (uploadingBanner) return;
+    setUploadingBanner(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || "";
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("server_id", serverId);
+      const { data: sess } = await supabase.auth.getSession();
+      const res = await fetch(`${apiUrl}/api/upload-server-banner`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sess.session?.access_token}` },
+        body: formData,
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Upload falhou"); }
+      const { url } = await res.json();
+      await supabase.from("servers").update({ banner_url: url }).eq("id", serverId);
+      onServerUpdate({ ...server, banner_url: url });
+      toast.success("Banner atualizado!");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setUploadingBanner(false);
+    }
+  }
+
   async function handleDelete() {
     if (!confirm("TEM CERTEZA? Esta ação é irreversível.")) return;
     if (!confirm("Sério mesmo? Confirme.")) return;
@@ -75,31 +103,48 @@ export function ServerOverviewTab({
         <div className="rounded-xl border border-border p-5 space-y-4 bg-accent/10">
           <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Editar servidor</h4>
 
-          <div className="flex items-center gap-4">
-            <div
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={onDrop}
-              onClick={() => fileRef.current?.click()}
-              className={`relative shrink-0 cursor-pointer group ${
-                dragOver ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
-              }`}>
-              <div className={`h-16 w-16 rounded-2xl overflow-hidden ring-2 transition-all ${dragOver ? "ring-primary scale-110" : "ring-border/40"} bg-gradient-to-br from-primary/20 to-primary/5 grid place-items-center`}>
-                {server.icon_url ? (
-                  <img src={server.icon_url} className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-300" alt="" />
-                ) : (
-                  <span className="text-lg font-bold text-primary/60">{server.name[0]?.toUpperCase()}</span>
+          <div className="space-y-3">
+            <div className="relative h-36 rounded-xl overflow-hidden bg-muted/10">
+              {server.banner_url ? (
+                <img src={server.banner_url} alt="banner" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full grid place-items-center text-muted-foreground/60">Sem banner do servidor</div>
+              )}
+              <div className="absolute right-3 top-3 flex items-center gap-2">
+                <button onClick={() => bannerRef.current?.click()} className="rounded bg-background/80 p-2 text-sm hover:bg-background">Mudar banner</button>
+                {server.banner_url && (
+                  <button onClick={async () => { await supabase.from('servers').update({ banner_url: null }).eq('id', serverId); onServerUpdate({ ...server, banner_url: null }); toast.success('Banner removido'); }} className="rounded bg-destructive/10 p-2 text-sm hover:bg-destructive/20">Remover</button>
                 )}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity grid place-items-center rounded-2xl">
-                  <Upload className="h-5 w-5 text-white" />
-                </div>
               </div>
-              <input type="file" ref={fileRef} className="hidden" accept="image/*"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadIcon(f); e.target.value = ""; }} />
+              <input type="file" ref={bannerRef} className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadBanner(f); e.target.value = ''; }} />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">{server.name}</p>
-              <p className="text-xs text-muted-foreground/60">Arraste uma imagem ou clique para trocar o ícone</p>
+
+            <div className="flex items-center gap-4">
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                onClick={() => fileRef.current?.click()}
+                className={`relative shrink-0 cursor-pointer group ${
+                  dragOver ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
+                }`}>
+                <div className={`h-16 w-16 rounded-2xl overflow-hidden ring-2 transition-all ${dragOver ? "ring-primary scale-110" : "ring-border/40"} bg-gradient-to-br from-primary/20 to-primary/5 grid place-items-center`}>
+                  {server.icon_url ? (
+                    <img src={server.icon_url} className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-300" alt="" />
+                  ) : (
+                    <span className="text-lg font-bold text-primary/60">{server.name[0]?.toUpperCase()}</span>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity grid place-items-center rounded-2xl">
+                    <Upload className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <input type="file" ref={fileRef} className="hidden" accept="image/*"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadIcon(f); e.target.value = ""; }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{server.name}</p>
+                <p className="text-xs text-muted-foreground/60">Arraste uma imagem ou clique para trocar o ícone</p>
+              </div>
             </div>
           </div>
 
