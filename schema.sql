@@ -155,7 +155,7 @@ CREATE OR REPLACE FUNCTION public.add_owner_as_member()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   INSERT INTO public.server_members (server_id, user_id, level)
-    VALUES (NEW.id, NEW.owner_id, 99)
+    VALUES (NEW.id, NEW.owner_id, 100)
     ON CONFLICT DO NOTHING;
   INSERT INTO public.channels (server_id, name, type, position)
     VALUES (NEW.id, 'geral', 'text', 0)
