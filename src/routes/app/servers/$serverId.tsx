@@ -562,7 +562,6 @@ function ServerToolbar({ canManage, isOwner, serverId, server, leave, settingsOp
     <div className="border-t border-sidebar-border bg-sidebar/80 shrink-0">
       {toolsOpen && (
         <div className="p-2 flex flex-wrap gap-1 border-b border-sidebar-border bg-sidebar/50">
-          <ServerRolesDialog serverId={serverId} canManage={canManage} />
           <ServerEventsDialog serverId={serverId} canManage={canManage} />
           <InvitesDialog serverId={serverId} canManage={canManage} />
           <ThemeDialog serverId={serverId} server={server} canManage={canManage} />
