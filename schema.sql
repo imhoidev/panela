@@ -145,7 +145,7 @@ CREATE TABLE IF NOT EXISTS public.servers (
   min_age INTEGER DEFAULT 13,
   focus_tags TEXT[] DEFAULT '{}',
   template TEXT,
-  member_count INTEGER NOT NULL DEFAULT 1,
+  member_count INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
