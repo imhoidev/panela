@@ -481,9 +481,7 @@ function ChannelItem({ c, serverId, loc, canManage, deleteChannel, updateChannel
             <span className="truncate text-[13px]">{c.name}</span>
           </>
         </Link>
-        <Icon className={`h-4 w-4 shrink-0 ${iconColor} ${active ? "drop-shadow-sm" : ""}`} />
-        <span className="truncate text-[13px]">{c.name}</span>
-      </Link>
+        </div>
       {canManage && (
         <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
           <button onClick={() => { setEditName(c.name); setEditTopic(c.topic ?? ""); setEditDesc(c.description ?? ""); setEditMinLevel(c.min_level ?? 1); setEditOpen(true); }}
