@@ -271,8 +271,10 @@ function ChannelView() {
     const { data, error } = await supabase.from("messages").insert({
       channel_id: channelId, author_id: user.id, content, reply_to: reply,
     }).select().maybeSingle();
-    if (error?.message?.includes("is_muted") || error?.code === "42501") {
-      setSending(false); return toast.error("Você está silenciado neste servidor.");
+    if (error) {
+      setSending(false);
+      if (error.code === "42501") return toast.error("Você está silenciado neste servidor.");
+      return toast.error(error.message);
     }
     if (!error && data) {
       const m = data as Msg;
