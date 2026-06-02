@@ -52,10 +52,22 @@ function AdminPanel() {
 
   async function setSubStatus(id: string, status: "active" | "rejected" | "canceled") {
     const update: any = { status, reviewed_at: new Date().toISOString() };
-    if (status === "active") { update.starts_at = new Date().toISOString(); update.ends_at = new Date(Date.now() + 31 * 24 * 3600 * 1000).toISOString(); }
+    if (status === "active") {
+      update.starts_at = new Date().toISOString();
+      update.ends_at = new Date(Date.now() + 31 * 24 * 3600 * 1000).toISOString();
+    }
     const { error } = await supabase.from("subscriptions").update(update).eq("id", id);
     if (error) return toast.error(error.message);
-    toast.success("Atualizado"); reload();
+
+    if (status === "active") {
+      const sub = subs.find((x) => x.id === id);
+      if (sub) {
+        await supabase.from("profiles").update({ current_plan: "pro", updated_at: new Date().toISOString() }).eq("id", sub.user_id);
+      }
+    }
+
+    toast.success("Atualizado");
+    reload();
   }
   async function grantRole(userId: string, role: AppRole) {
     setGranting(userId);

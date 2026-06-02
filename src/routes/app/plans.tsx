@@ -35,6 +35,8 @@ function PlansPage() {
     setLatest((data?.[0] as Sub) ?? null);
   }
 
+  const activeSubscription = latest?.status === "active" ? latest : null;
+
   async function requestPro() {
     if (!user || !contactValue.trim()) return toast.error("Informe seu contato.");
     setSubmitting(true);
@@ -75,6 +77,11 @@ function PlansPage() {
         <p className="text-muted-foreground text-sm">Pagamento manual via contato direto com o CEO. Sem cartão, sem boleto automático — fala com a gente.</p>
       </header>
 
+      {activeSubscription && (
+        <Card className="p-4 border-primary/30 bg-primary/5">
+          <p className="text-sm"><Badge className="bg-primary text-background mr-2">PRO ativo</Badge>Seu plano PRO está ativo até <strong>{activeSubscription.ends_at ? new Date(activeSubscription.ends_at).toLocaleDateString("pt-BR") : "data indefinida"}</strong>.</p>
+        </Card>
+      )}
       {latest && latest.status === "pending" && (
         <Card className="p-4 border-gold/30 bg-gold/5">
           <p className="text-sm"><Badge className="bg-gold text-background mr-2">Pendente</Badge>Seu pedido PRO foi enviado. Aguarde contato.</p>
