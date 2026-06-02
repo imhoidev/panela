@@ -38,7 +38,7 @@ export function ServerMembersTab({
 
   const { data: allRoles = [], isLoading: rolesLoading } = useServerRoles(serverId);
   const { data: memberRoleMap = new Map<string, string[]>(), isLoading: rolesMapLoading } = useMemberRoleMap(serverId);
-  const { data: members: queryMembers = [] } = useServerMembers(serverId);
+  const { data: queryMembers = [] } = useServerMembers(serverId);
   const { data: bans = [] } = useServerBans(serverId);
   const { data: mutes = [] } = useServerMutes(serverId);
 
