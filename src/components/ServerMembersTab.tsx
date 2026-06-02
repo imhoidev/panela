@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,7 +10,7 @@ import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Label } from "@/components/ui/label";
 import { LevelBadge } from "@/components/LevelBadge";
 import {
-  useServerRoles, useMemberRoleMap, useKickMember, useBanMember, useMuteMember,
+  useServerRoles, useMemberRoleMap, useServerMembers, useKickMember, useBanMember, useMuteMember,
   useServerBans, useServerMutes, useAssignRole, useRemoveRole, useUnbanMember, useUnmuteMember,
   useUpdateMemberLevel,
 } from "@/hooks/servers";
@@ -27,7 +26,7 @@ export function ServerMembersTab({
   kickMember, presence, isOwner,
 }: {
   server: any; serverId: string; canManage: boolean; canKick: boolean;
-  members: any[]; kickMember?: (uid: string) => void;
+  members?: any[]; kickMember?: (uid: string) => void;
   presence: Map<string, string>; isOwner: boolean;
 }) {
   const [memberSearch, setMemberSearch] = useState("");
@@ -39,6 +38,7 @@ export function ServerMembersTab({
 
   const { data: allRoles = [], isLoading: rolesLoading } = useServerRoles(serverId);
   const { data: memberRoleMap = new Map<string, string[]>(), isLoading: rolesMapLoading } = useMemberRoleMap(serverId);
+  const { data: members: queryMembers = [] } = useServerMembers(serverId);
   const { data: bans = [] } = useServerBans(serverId);
   const { data: mutes = [] } = useServerMutes(serverId);
 
@@ -51,6 +51,8 @@ export function ServerMembersTab({
   const removeRole = useRemoveRole(serverId);
   const updateLevel = useUpdateMemberLevel(serverId);
 
+  const effectiveMembers = members ?? queryMembers;
+
   if (rolesLoading || rolesMapLoading) {
     return (
       <div className="space-y-2">
@@ -60,7 +62,7 @@ export function ServerMembersTab({
     );
   }
 
-  const sortedMembers = [...members].sort((a, b) => {
+  const sortedMembers = [...effectiveMembers].sort((a, b) => {
     if (a.user_id === server?.owner_id) return -1;
     if (b.user_id === server?.owner_id) return 1;
     if (memberSort === "online") {
@@ -111,7 +113,7 @@ export function ServerMembersTab({
           <p className="text-xs font-medium">{memberSearch ? "Ninguém encontrado" : "Nenhum membro"}</p>
         </div>
       ) : (
-        <ScrollArea className="h-[340px] -mx-1 px-1">
+        <ScrollArea className="h-[min(60vh,520px)] max-h-[calc(100vh-280px)] -mx-1 px-1">
           <div className="space-y-3">
             {filteredMembers.map((m: any) => {
               const p = m.profiles;
