@@ -105,7 +105,7 @@
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
+  *, *::before, *::after { box-sizing: border-box; border-color: var(--color-border); }
   html, body { background: var(--color-background); color: var(--color-foreground); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
   body {
     background-image:
@@ -113,7 +113,10 @@
       radial-gradient(circle at 88% 105%, rgba(255,194,51,0.06), transparent 48%);
     min-height: 100vh;
     overscroll-behavior: none;
+    overflow-x: hidden;
   }
+  img, picture, video, canvas, svg { max-width: 100%; height: auto; }
+  button, input, textarea, select { font: inherit; }
 
   .glow-primary {
     box-shadow: 0 0 30px rgba(255,106,0,0.24), inset 0 0 18px rgba(255,149,0,0.12);

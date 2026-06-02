@@ -83,7 +83,7 @@ function ServersIndex() {
 
   return (
     <div className="max-w-5xl mx-auto p-6 md:p-10 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end justify-between">
         <div>
           <h1 className="text-2xl font-bold">Meus servidores</h1>
           <p className="text-sm text-muted-foreground">Suas panelas pessoais. Crie, convide, converse.</p>
@@ -149,7 +149,7 @@ function ServersIndex() {
             </div>
 
             {/* Privacy + Create */}
-            <div className="flex items-end gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1 space-y-1.5">
                 <Label className="text-xs font-semibold">Privacidade</Label>
                 <Select value={privacy} onValueChange={(v: any) => setPrivacy(v)}>
@@ -160,7 +160,7 @@ function ServersIndex() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button className="h-10 flex-1" onClick={create}
+              <Button className="h-10 w-full sm:w-auto" onClick={create}
                 disabled={creating || !name.trim() || !slugOk}>
                 {creating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-1.5" />}
                 {creating ? "Criando..." : "Criar panela"}

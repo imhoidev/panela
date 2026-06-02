@@ -71,7 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const hideBottomNav = loc.pathname.match(/^\/app\/servers\/[^/]+\/[^/]+$/) || loc.pathname.match(/^\/app\/dms\/[^/]+$/);
 
   return (
-    <div className="flex h-[100dvh] w-screen overflow-hidden bg-background text-foreground">
+    <div className="flex min-h-screen w-full overflow-hidden bg-background text-foreground">
       <ServersRail myServers={myServers} activeServerId={activeServerId} loc={loc} loading={loading} />
 
       <aside className="hidden lg:flex w-60 flex-col border-r border-border bg-sidebar">
@@ -109,7 +109,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Button>
         </header>
 
-        <main className="flex-1 min-w-0 min-h-0 overflow-auto overscroll-contain">
+        <main className="flex-1 min-w-0 min-h-0 overflow-auto overscroll-contain pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
 
