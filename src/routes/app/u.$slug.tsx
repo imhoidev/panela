@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { getSocket } from "@/lib/socket";
+import { useRealtimeSocket } from "@/hooks/useRealtime";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -59,6 +59,7 @@ function PublicProfile() {
   const [status, setStatus] = useState<string>("offline");
   const [statusText, setStatusText] = useState<string>("");
   const [notFound, setNotFound] = useState(false);
+  const { socket } = useRealtimeSocket();
 
   const isOwn = user?.id != null && (user.id === slug || user.id === targetId);
 
@@ -66,7 +67,6 @@ function PublicProfile() {
     if (!slug) return;
     setTargetId(null); setNotFound(false);
     let cancelled = false;
-    let socketInstance: ReturnType<typeof getSocket> | null = null;
     let cleanupSocket = () => {};
 
     async function load() {
@@ -112,23 +112,21 @@ function PublicProfile() {
       }
 
       setStatusText(profile.status_text || "");
-      if (user && session) {
-        const s = getSocket(user.id, session.access_token ?? undefined);
-        socketInstance = s;
+      if (user && socket) {
         const onUsers = (users: { userId: string; status: string }[]) => {
           const found = users.find((u) => u.userId === uid);
           if (found) setStatus(found.status || "online");
         };
         const joinProfileRoom = () => {
-          s.emit("presence:join", { serverId: "__profile__", status: "online" });
-          s.emit("presence:subscribe", [uid]);
+          socket.emit("presence:join", { serverId: "__profile__", status: "online" });
+          socket.emit("presence:subscribe", [uid]);
         };
-        s.on("presence:users", onUsers);
-        s.on("connect", joinProfileRoom);
-        if (s.connected) joinProfileRoom();
+        socket.on("presence:users", onUsers);
+        socket.on("connect", joinProfileRoom);
+        if (socket.connected) joinProfileRoom();
         cleanupSocket = () => {
-          s.off("presence:users", onUsers);
-          s.off("connect", joinProfileRoom);
+          socket.off("presence:users", onUsers);
+          socket.off("connect", joinProfileRoom);
         };
       }
     }
@@ -138,7 +136,7 @@ function PublicProfile() {
       cancelled = true;
       cleanupSocket();
     };
-  }, [slug, user?.id, session?.access_token]);
+  }, [slug, user?.id, socket]);
 
   // ── 404 ──
   if (notFound) {

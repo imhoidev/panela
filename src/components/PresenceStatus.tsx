@@ -1,4 +1,4 @@
-import { getSocket } from "@/lib/socket";
+import { useRealtimeSocket } from "@/hooks/useRealtime";
 import { useAuth } from "@/hooks/use-auth";
 import { useIdle } from "@/lib/use-idle";
 import { useEffect, useState } from "react";
@@ -46,15 +46,15 @@ export function StatusText({ statusText }: { statusText?: string | null }) {
 }
 
 export function StatusPicker({ currentStatus, statusText: initialText, onSet }: { currentStatus?: string; statusText?: string | null; onSet?: (s: string) => void }) {
-  const { user, session } = useAuth();
+  const { user } = useAuth();
+  const { emit } = useRealtimeSocket();
   const [statusText, setStatusText] = useState(initialText ?? "");
   const [editingText, setEditingText] = useState(false);
 
   async function setStatus(status: string) {
     if (!user) return;
     await supabase.from("profiles").update({ status }).eq("id", user.id);
-    const s = getSocket(user.id, session?.access_token ?? undefined);
-    s.emit("presence:set", status);
+    emit("presence:set", status);
     onSet?.(status);
   }
 

@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useRealtimeSocket } from "@/hooks/useRealtime";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UsernameBadge } from "@/components/UsernameBadge";
@@ -92,6 +93,7 @@ function ChannelView() {
   const profilesCache = useRef<Map<string, Msg["author"]>>(new Map());
   const memberRolesCache = useRef<Map<string, { name: string; color: string | null; gif_tag_url: string | null }[]>>(new Map());
   const typingChan = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const { socket } = useRealtimeSocket();
   const lastTypingSent = useRef(0);
   const prevScrollHeight = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -218,9 +220,61 @@ function ChannelView() {
           else if (payload.eventType === "DELETE") setReactions((p) => p.filter((r) => r.id !== (payload.old as any).id));
         })
       .subscribe();
-    typingChan.current = ch;
-    return () => { supabase.removeChannel(ch); typingChan.current = null; };
-  }, [channelId, user?.id, channel?.type]);
+    return () => { supabase.removeChannel(ch); };
+  }, [channelId, channel?.type]);
+
+  useEffect(() => {
+    if (!socket || !channel || channel.type === "voice") return;
+
+    const onConnect = () => {
+      socket.emit("channel:join", channelId);
+    };
+    const onMessageNew = async (m: Msg) => {
+      if (knownIds.current.has(m.id) || m.thread_root) return;
+      knownIds.current.add(m.id);
+      m.author = await fetchProfile(m.author_id);
+      setMessages((prev) => [...prev, m]);
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          const atBottom = scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight < 150;
+          if (atBottom) scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+        }
+      });
+    };
+    const onMessageDeleted = ({ messageId }: { messageId: string }) => {
+      knownIds.current.delete(messageId);
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    };
+    const onMessageUpdated = async (m: Msg) => {
+      m.author = await fetchProfile(m.author_id);
+      setMessages((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x));
+    };
+    const onTypingStart = ({ userId: uid, username }: { userId: string; username: string }) => {
+      if (uid === user?.id) return;
+      setTyping((prev) => ({ ...prev, [uid]: { name: username, t: Date.now() } }));
+    };
+    const onTypingStop = ({ userId: uid }: { userId: string }) => {
+      setTyping((prev) => { const next: typeof prev = {}; Object.entries(prev).forEach(([key, value]) => { if (key !== uid && Date.now() - value.t < 4000) next[key] = value; }); return next; });
+    };
+
+    if (socket.connected) onConnect();
+    socket.on("connect", onConnect);
+    socket.on("message:new", onMessageNew);
+    socket.on("message:deleted", onMessageDeleted);
+    socket.on("message:updated", onMessageUpdated);
+    socket.on("typing:start", onTypingStart);
+    socket.on("typing:stop", onTypingStop);
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("message:new", onMessageNew);
+      socket.off("message:deleted", onMessageDeleted);
+      socket.off("message:updated", onMessageUpdated);
+      socket.off("typing:start", onTypingStart);
+      socket.off("typing:stop", onTypingStop);
+      socket.emit("channel:leave", channelId);
+    };
+  }, [socket, channelId, channel?.type, user?.id]);
 
   // Typing via Supabase Realtime broadcast
   useEffect(() => {
@@ -260,6 +314,10 @@ function ChannelView() {
   function emitTyping() {
     const now = Date.now(); if (now - lastTypingSent.current < 2500) return;
     lastTypingSent.current = now;
+    if (socket) {
+      socket.emit("typing:start", { channelId, username: profile?.display_name || profile?.username });
+      return;
+    }
     typingChan.current?.send({ type: "broadcast", event: "typing", payload: { userId: user!.id, username: profile?.display_name || profile?.username } });
   }
 
@@ -276,11 +334,12 @@ function ChannelView() {
       if (error.code === "42501") return toast.error("Você está silenciado neste servidor.");
       return toast.error(error.message);
     }
-    if (!error && data) {
+    if (data) {
       const m = data as Msg;
       knownIds.current.add(m.id);
       m.author = profilesCache.current.get(m.author_id) ?? null;
       setMessages((prev) => [...prev, m]);
+      if (socket) socket.emit("message:new", { channelId, message: m });
       requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }));
     }
     setSending(false);
@@ -297,12 +356,17 @@ function ChannelView() {
     if (!confirm("Apagar essa mensagem?")) return;
     knownIds.current.delete(m.id);
     setMessages((prev) => prev.filter((x) => x.id !== m.id));
+    if (socket) socket.emit("message:deleted", { channelId, messageId: m.id });
     await supabase.from("messages").delete().eq("id", m.id);
   }
 
   async function saveEdit() {
-    if (!editing) return; const c = editText.trim(); if (!c) return;
-    await supabase.from("messages").update({ content: c, edited_at: new Date().toISOString() }).eq("id", editing.id);
+    if (!editing) return;
+    const c = editText.trim(); if (!c) return;
+    const { data, error } = await supabase.from("messages").update({ content: c, edited_at: new Date().toISOString() })
+      .eq("id", editing.id).select().maybeSingle();
+    if (error) return toast.error(error.message);
+    if (data && socket) socket.emit("message:updated", { channelId, message: data as Msg });
     setEditing(null);
   }
 

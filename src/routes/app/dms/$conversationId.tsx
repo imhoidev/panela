@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UsernameBadge } from "@/components/UsernameBadge";
 import { Button } from "@/components/ui/button";
-import { getSocket } from "@/lib/socket";
+import { useRealtimeSocket } from "@/hooks/useRealtime";
 import { SendHorizontal, Paperclip, X, Trash2, CornerUpLeft, Loader2, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 
@@ -62,7 +62,7 @@ function DMChat() {
   const fileRef = useRef<HTMLInputElement>(null);
   const profilesCache = useRef<Map<string, any>>(new Map());
   const prevScrollHeight = useRef(0);
-  const sockRef = useRef<ReturnType<typeof getSocket> | null>(null);
+  const { socket } = useRealtimeSocket();
   const lastTypingSent = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const knownIds = useRef<Set<string>>(new Set());
@@ -184,15 +184,13 @@ function DMChat() {
 
   // Socket.io (instant delivery + typing + presence)
   useEffect(() => {
-    if (!user) return;
-    const s = getSocket(user.id, session?.access_token ?? undefined);
-    sockRef.current = s;
+    if (!user || !socket) return;
     const otherId = otherProfile?.id;
 
     const onConnect = () => {
-      s.emit("presence:join", { serverId: "__dm__", status: "online" });
-      if (conversationId) s.emit("dm:join", conversationId);
-      if (otherId) s.emit("presence:subscribe", [otherId]);
+      socket.emit("presence:join", { serverId: "__dm__", status: "online" });
+      if (conversationId) socket.emit("dm:join", conversationId);
+      if (otherId) socket.emit("presence:subscribe", [otherId, user.id]);
     };
     const onUsers = (users: { userId: string; status: string }[]) => {
       if (otherId) {
@@ -235,30 +233,32 @@ function DMChat() {
       setMessages((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x));
     };
 
-    if (s.connected) onConnect();
-    s.on("connect", onConnect);
-    s.on("presence:users", onUsers);
-    s.on("presence:update", onPresenceUpdate);
-
-    if (otherId) s.emit("presence:subscribe", [otherId, user.id]);
+    if (socket.connected) onConnect();
+    socket.on("connect", onConnect);
+    socket.on("presence:users", onUsers);
+    socket.on("presence:update", onPresenceUpdate);
 
     const typingTimeout = setInterval(() => { setOtherTyping(false); }, 4000);
 
-    s.on("typing:start", onTypingStart);
-    s.on("typing:stop", onTypingStop);
-    s.on("message:new", onMessageNew);
-    s.on("message:deleted", onMessageDeleted);
-    s.on("message:updated", onMessageUpdated);
+    socket.on("typing:start", onTypingStart);
+    socket.on("typing:stop", onTypingStop);
+    socket.on("message:new", onMessageNew);
+    socket.on("message:deleted", onMessageDeleted);
+    socket.on("message:updated", onMessageUpdated);
 
     return () => {
       clearInterval(typingTimeout);
-      s.off("connect", onConnect); s.off("presence:users", onUsers); s.off("presence:update", onPresenceUpdate);
-      s.off("typing:start", onTypingStart); s.off("typing:stop", onTypingStop);
-      s.off("message:new", onMessageNew); s.off("message:deleted", onMessageDeleted); s.off("message:updated", onMessageUpdated);
-      if (conversationId) s.emit("dm:leave", conversationId);
-      sockRef.current = null;
+      socket.off("connect", onConnect);
+      socket.off("presence:users", onUsers);
+      socket.off("presence:update", onPresenceUpdate);
+      socket.off("typing:start", onTypingStart);
+      socket.off("typing:stop", onTypingStop);
+      socket.off("message:new", onMessageNew);
+      socket.off("message:deleted", onMessageDeleted);
+      socket.off("message:updated", onMessageUpdated);
+      if (conversationId) socket.emit("dm:leave", conversationId);
     };
-  }, [user?.id, conversationId, otherProfile?.id]);
+  }, [user?.id, conversationId, otherProfile?.id, socket]);
 
   // Scroll detection
   useEffect(() => {
@@ -280,10 +280,10 @@ function DMChat() {
   }
 
   function emitTyping() {
-    const s = sockRef.current; if (!s) return;
+    if (!socket) return;
     const now = Date.now(); if (now - lastTypingSent.current < 2500) return;
     lastTypingSent.current = now;
-    s.emit("dm:typing:start", { conversationId, username: user?.email || "Você" });
+    socket.emit("dm:typing:start", { conversationId, username: user?.email || "Você" });
   }
 
   async function send(e: React.FormEvent) {
@@ -299,8 +299,7 @@ function DMChat() {
       const m = data as DM;
       knownIds.current.add(m.id);
       setMessages((prev) => [...prev, m]);
-      const s = sockRef.current;
-      if (s) s.emit("message:new", { conversationId, message: m });
+      if (socket) socket.emit("message:new", { conversationId, message: m });
       requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }));
     }
     setSending(false);
@@ -310,7 +309,7 @@ function DMChat() {
     if (!confirm("Apagar?")) return;
     knownIds.current.delete(m.id);
     setMessages((prev) => prev.filter((x) => x.id !== m.id));
-    const s = sockRef.current; if (s) s.emit("message:deleted", { conversationId, messageId: m.id });
+    if (socket) socket.emit("message:deleted", { conversationId, messageId: m.id });
     await supabase.from("dm_messages").delete().eq("id", m.id);
   }
 
