@@ -70,6 +70,44 @@ export function useUpdateChannel(serverId: string) {
   });
 }
 
+export function useReorderChannels(serverId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (items: Array<{ id: string; position?: number | null; category?: string | null }>) => {
+      const apiUrl = import.meta.env.VITE_API_URL || "";
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      const res = await fetch(`${apiUrl}/api/channels/reorder`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify(items),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Erro ao reordenar canais");
+      }
+    },
+    onMutate: async (items) => {
+      await qc.cancelQueries({ queryKey: ["channels", serverId] });
+      const prev = qc.getQueryData(["channels", serverId]);
+      qc.setQueryData(["channels", serverId], (old: any[]) =>
+        old?.map((channel: any) => {
+          const item = items.find((i) => i.id === channel.id);
+          return item ? { ...channel, ...item } : channel;
+        }) ?? []
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["channels", serverId], ctx.prev);
+      toast.error("Erro ao reordenar canais");
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["channels", serverId] }),
+  });
+}
+
 export function useDeleteChannel(serverId: string) {
   const qc = useQueryClient();
   return useMutation({

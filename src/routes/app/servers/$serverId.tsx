@@ -22,7 +22,7 @@ import { InvitesDialog } from "@/components/Invites";
 import { ModeracaoDialog } from "@/components/ModPanel";
 import {
   useServerDetails, useServerChannels, useMemberLevel, useServerMembers,
-  useCreateChannel, useDeleteChannel, useKickMember, useUpdateChannel,
+  useCreateChannel, useDeleteChannel, useKickMember, useUpdateChannel, useReorderChannels,
   useServerRealtime, usePresenceChannel,
 } from "@/hooks/servers";
 import {
@@ -77,6 +77,7 @@ function ServerLayout() {
   const createChannel = useCreateChannel(serverId);
   const deleteChannelMut = useDeleteChannel(serverId);
   const updateChannel = useUpdateChannel(serverId);
+  const reorderChannels = useReorderChannels(serverId);
   const kickMutation = useKickMember(serverId);
 
   useServerRealtime(serverId);
@@ -125,9 +126,10 @@ function ServerLayout() {
   const isOwner = server.owner_id === user?.id;
   const canKick = memberLevel >= 60;
 
+  const sortedChannels = [...channels].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
   const categories = new Map<string, any[]>();
   const uncategorized: any[] = [];
-  channels.forEach((c: any) => {
+  sortedChannels.forEach((c: any) => {
     if (c.category) { const arr = categories.get(c.category) ?? []; arr.push(c); categories.set(c.category, arr); }
     else { uncategorized.push(c); }
   });
@@ -199,12 +201,12 @@ function ServerLayout() {
 
         <ChannelsList
           categories={categories} uncategorized={uncategorized} collapsedCats={collapsedCats} toggleCat={toggleCat}
-          channels={channels}
+          channels={sortedChannels}
           serverId={serverId} loc={loc} canManage={canManage}
           open={open} setOpen={setOpen} newName={newName} setNewName={setNewName}
           newType={newType} setNewType={setNewType} newCategory={newCategory} setNewCategory={setNewCategory}
           addChannel={addChannel} deleteChannel={deleteChannel}
-          updateChannel={updateChannel}
+          updateChannel={updateChannel} reorderChannels={reorderChannels}
         />
         <ServerToolbar
           canManage={canManage} isOwner={isOwner} serverId={serverId} server={server}
@@ -310,7 +312,7 @@ function ServerLayout() {
   );
 }
 
-function ChannelsList({ categories, uncategorized, collapsedCats, toggleCat, channels, serverId, loc, canManage, open, setOpen, newName, setNewName, newType, setNewType, newCategory, setNewCategory, addChannel, deleteChannel, updateChannel }: any) {
+function ChannelsList({ categories, uncategorized, collapsedCats, toggleCat, channels, serverId, loc, canManage, open, setOpen, newName, setNewName, newType, setNewType, newCategory, setNewCategory, addChannel, deleteChannel, updateChannel, reorderChannels }: any) {
   const [editingCat, setEditingCat] = useState<string | null>(null);
   const [editingCatVal, setEditingCatVal] = useState("");
 
@@ -328,13 +330,43 @@ function ChannelsList({ categories, uncategorized, collapsedCats, toggleCat, cha
     toast.success("Categoria removida");
   }
 
+  function reorderCategoryItems(draggedId: string, targetCategory: string | null, targetIndex: number) {
+    const sorted = [...channels].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
+    const dragged = sorted.find((c: any) => c.id === draggedId);
+    if (!dragged) return;
+    const sourceCategory = dragged.category ?? null;
+    const targetCategoryNormalized = targetCategory ?? null;
+
+    const sourceItems = sorted.filter((c: any) => (c.category ?? null) === sourceCategory && c.id !== draggedId);
+    const targetItems = sorted.filter((c: any) => (c.category ?? null) === targetCategoryNormalized && c.id !== draggedId);
+
+    if (sourceCategory !== targetCategoryNormalized) {
+      dragged.category = targetCategoryNormalized;
+    }
+    targetItems.splice(targetIndex, 0, dragged);
+
+    const updates: any[] = [];
+    targetItems.forEach((item: any, idx: number) => {
+      if (item.position !== idx || item.category !== targetCategoryNormalized) {
+        updates.push({ id: item.id, position: idx, category: targetCategoryNormalized });
+      }
+    });
+    if (sourceCategory !== targetCategoryNormalized) {
+      sourceItems.forEach((item: any, idx: number) => {
+        if (item.position !== idx) updates.push({ id: item.id, position: idx, category: item.category ?? null });
+      });
+    }
+    if (updates.length) {
+      reorderChannels.mutate(updates);
+      toast.success("Ordem atualizada");
+    }
+  }
+
   function onDropToCategory(e: React.DragEvent, cat: string, chs: any[]) {
     e.preventDefault();
     const id = e.dataTransfer.getData("text/plain");
     if (!id) return;
-    // Move channel to target category, append to end
-    updateChannel.mutate({ id, category: cat, position: chs.length });
-    toast.success("Canal movido");
+    reorderCategoryItems(id, cat, chs.length);
   }
 
   function onDragOverCat(e: React.DragEvent) { e.preventDefault(); }
@@ -345,42 +377,46 @@ function ChannelsList({ categories, uncategorized, collapsedCats, toggleCat, cha
         <div className="flex items-center justify-between px-2.5 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/50">
           <span className="font-semibold">Canais</span>
           {canManage && (
-            <ResponsiveDialog open={open} onOpenChange={setOpen}
-              title="Novo canal"
-              trigger={<button className="hover:text-foreground p-0.5 rounded hover:bg-sidebar-accent/60 transition-colors" title="Criar canal"><Plus className="h-3.5 w-3.5" /></button>}>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label>Tipo</Label>
-                  <Select value={newType} onValueChange={(v: any) => setNewType(v)}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="text">Texto</SelectItem>
-                      <SelectItem value="voice">Voz</SelectItem>
-                      <SelectItem value="announcement">Anúncios</SelectItem>
-                      <SelectItem value="rules">Regras</SelectItem>
-                      <SelectItem value="forum">Forum</SelectItem>
-                    </SelectContent>
-                  </Select>
+            <div className="flex items-center gap-2">
+              <ResponsiveDialog open={open} onOpenChange={setOpen}
+                title="Novo canal"
+                trigger={<button className="hover:text-foreground p-0.5 rounded hover:bg-sidebar-accent/60 transition-colors" title="Criar canal"><Plus className="h-3.5 w-3.5" /></button>}>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Tipo</Label>
+                    <Select value={newType} onValueChange={(v: any) => setNewType(v)}>
+                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="text">Texto</SelectItem>
+                        <SelectItem value="voice">Voz</SelectItem>
+                        <SelectItem value="announcement">Anúncios</SelectItem>
+                        <SelectItem value="rules">Regras</SelectItem>
+                        <SelectItem value="forum">Forum</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Nome</Label>
+                    <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="nome-do-canal" className="h-10" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Categoria (opcional)</Label>
+                    <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="ex: Geral, Voz, Jogos" className="h-10" />
+                  </div>
+                  <Button onClick={addChannel} className="w-full h-10">Criar</Button>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Nome</Label>
-                  <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="nome-do-canal" className="h-10" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Categoria (opcional)</Label>
-                  <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="ex: Geral, Voz, Jogos" className="h-10" />
-                </div>
-                <Button onClick={addChannel} className="w-full h-10">Criar</Button>
-              </div>
-            </ResponsiveDialog>
+              </ResponsiveDialog>
+              <button type="button" onClick={() => { setNewCategory(""); setOpen(true); }}
+                className="h-9 rounded-lg border border-border bg-sidebar/80 px-3 text-xs text-muted-foreground hover:border-primary hover:text-foreground transition-colors">
+                Nova categoria
+              </button>
+            </div>
           )}
         </div>
         {uncategorized.map((c: any, idx: number) => (
           <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} updateChannel={updateChannel}
             index={idx} onMove={async (draggedId: string, before: boolean) => {
-              const newPos = before ? idx : idx + 1;
-              updateChannel.mutate({ id: draggedId, category: null, position: newPos });
-              toast.success("Canal movido");
+              reorderCategoryItems(draggedId, null, before ? idx : idx + 1);
             }} />
         ))}
         {[...categories.entries()].map(([cat, chs]) => (
@@ -403,9 +439,7 @@ function ChannelsList({ categories, uncategorized, collapsedCats, toggleCat, cha
               {chs.map((c: any, idx: number) => (
                 <ChannelItem key={c.id} c={c} serverId={serverId} loc={loc} canManage={canManage} deleteChannel={deleteChannel} updateChannel={updateChannel}
                   index={idx} onMove={async (draggedId: string, before: boolean) => {
-                    const newPos = before ? idx : idx + 1;
-                    updateChannel.mutate({ id: draggedId, category: cat, position: newPos });
-                    toast.success("Canal movido");
+                    reorderCategoryItems(draggedId, cat, before ? idx : idx + 1);
                   }} />
               ))}
             </div>
