@@ -73,7 +73,6 @@ function ServerLayout() {
   const { data: server, isLoading: serverLoading, refetch: refetchServer } = useServerDetails(serverId);
   const { data: channels = [], isLoading: channelsLoading } = useServerChannels(serverId);
   const { data: memberLevel = 0 } = useMemberLevel(serverId, user?.id);
-  const { data: members = [] } = useServerMembers(serverId);
   const createChannel = useCreateChannel(serverId);
   const deleteChannelMut = useDeleteChannel(serverId);
   const updateChannel = useUpdateChannel(serverId);
@@ -304,7 +303,7 @@ function ServerLayout() {
         contentClassName="h-full overflow-hidden p-0">
         <ServerSettingsPanel
           server={server} serverId={serverId} isOwner={isOwner} canManage={canManage} canKick={canKick}
-          members={members} kickMember={kickMember} presence={presence}
+          kickMember={kickMember} presence={presence}
           onServerUpdate={(s: any) => refetchServer()}
         />
       </ResponsiveDialog>
@@ -638,8 +637,9 @@ function SlugEdit({ slug, serverId, onSaved }: { slug: string; serverId: string;
   );
 }
 
-function ServerSettingsPanel({ server, serverId, isOwner, canManage, canKick, members, kickMember, presence, onServerUpdate }: any) {
+function ServerSettingsPanel({ server, serverId, isOwner, canManage, canKick, kickMember, presence, onServerUpdate }: any) {
   const [tab, setTab] = useState("overview");
+  const { data: members = [] } = useServerMembers(serverId);
   return (
     <Tabs value={tab} onValueChange={setTab} className="flex flex-col h-full">
       <div className="p-4 md:p-5 pb-0">

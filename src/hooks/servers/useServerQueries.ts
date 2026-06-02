@@ -31,7 +31,7 @@ export function useServerMembers(serverId: string) {
     queryFn: async () => {
       const { data: mems } = await supabase
         .from("server_members")
-        .select("id, user_id, level, xp, joined_at")
+        .select("id, user_id, level, nickname, joined_at")
         .eq("server_id", serverId);
       if (!mems?.length) return [];
       const userIds = mems.map((m: any) => m.user_id);

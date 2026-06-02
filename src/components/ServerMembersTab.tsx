@@ -10,7 +10,7 @@ import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Label } from "@/components/ui/label";
 import { LevelBadge } from "@/components/LevelBadge";
 import {
-  useServerRoles, useMemberRoleMap, useServerMembers, useKickMember, useBanMember, useMuteMember,
+  useServerRoles, useMemberRoleMap, useKickMember, useBanMember, useMuteMember,
   useServerBans, useServerMutes, useAssignRole, useRemoveRole, useUnbanMember, useUnmuteMember,
   useUpdateMemberLevel,
 } from "@/hooks/servers";
@@ -38,7 +38,6 @@ export function ServerMembersTab({
 
   const { data: allRoles = [], isLoading: rolesLoading } = useServerRoles(serverId);
   const { data: memberRoleMap = new Map<string, string[]>(), isLoading: rolesMapLoading } = useMemberRoleMap(serverId);
-  const { data: queryMembers = [] } = useServerMembers(serverId);
   const { data: bans = [] } = useServerBans(serverId);
   const { data: mutes = [] } = useServerMutes(serverId);
 
@@ -51,7 +50,7 @@ export function ServerMembersTab({
   const removeRole = useRemoveRole(serverId);
   const updateLevel = useUpdateMemberLevel(serverId);
 
-  const effectiveMembers = members ?? queryMembers;
+  const effectiveMembers = members ?? [];
 
   if (rolesLoading || rolesMapLoading) {
     return (
