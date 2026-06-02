@@ -170,7 +170,9 @@ export function ServerOverviewTab({
               ))}
             </div>
           </div>
-          <Button onClick={() => updateServer.mutate({ name: editName.trim(), description: editDesc.trim() || null, privacy: editPrivacy })}
+          <Button onClick={() => updateServer.mutate({ name: editName.trim(), description: editDesc.trim() || null, privacy: editPrivacy }, {
+              onSuccess: () => onServerUpdate({ ...server, name: editName.trim(), description: editDesc.trim() || null, privacy: editPrivacy }),
+            })}
             disabled={updateServer.isPending} className="w-full h-10 text-sm">
             {updateServer.isPending ? "Salvando..." : "Salvar alterações"}
           </Button>
@@ -187,7 +189,9 @@ export function ServerOverviewTab({
               <Input value={newSlug} onChange={(e) => setNewSlug(slugify(e.target.value))}
                 maxLength={32} placeholder="meu-servidor" className="h-9 text-sm font-mono pl-8" />
             </div>
-            <Button onClick={() => updateServer.mutate({ slug: slugify(newSlug) })}
+            <Button onClick={() => updateServer.mutate({ slug: slugify(newSlug) }, {
+                onSuccess: () => onServerUpdate({ ...server, slug: slugify(newSlug) }),
+              })}
               disabled={updateServer.isPending || !newSlug.trim() || slugify(newSlug) === server.slug} size="sm" className="h-9">
               Salvar
             </Button>

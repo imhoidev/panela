@@ -184,6 +184,21 @@ export function useMuteMember(serverId: string) {
   });
 }
 
+export function useUpdateMemberLevel(serverId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, level }: { userId: string; level: number }) => {
+      const { error } = await supabase.from("server_members").update({ level }).eq("server_id", serverId).eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["members", serverId] });
+      toast.success("Nível do membro atualizado");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+}
+
 export function useUnmuteMember(serverId: string) {
   const qc = useQueryClient();
   return useMutation({
