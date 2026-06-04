@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UsernameBadge } from "@/components/UsernameBadge";
 import { Button } from "@/components/ui/button";
 import { useRealtimeSocket } from "@/hooks/useRealtime";
-import { SendHorizontal, Paperclip, X, Trash2, CornerUpLeft, Loader2, ArrowDown, RefreshCcw, Slash, ShieldOff, BellOff, Bell } from "lucide-react";
+import { SendHorizontal, Paperclip, X, Trash2, CornerUpLeft, Loader2, ArrowDown, RefreshCcw, Slash, ShieldOff, Bell } from "lucide-react";
 import { toast } from "sonner";
 
 type DM = {

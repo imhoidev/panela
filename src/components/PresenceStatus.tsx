@@ -7,7 +7,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { CircleIcon, Check, MessageCircle } from "lucide-react";
+import { Circle, Check, MessageSquare } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
   online: "Online",
@@ -83,7 +83,7 @@ export function StatusPicker({ currentStatus, statusText: initialText, onSet }: 
       <DropdownMenuContent align="start" className="w-52">
         {["online", "idle", "dnd", "invisible"].map((s) => (
           <DropdownMenuItem key={s} onClick={() => setStatus(s)} className="flex items-center gap-2">
-            <CircleIcon className={`h-3.5 w-3.5 fill-current ${STATUS_COLORS[s]}`} />
+            <Circle className={`h-3.5 w-3.5 fill-current ${STATUS_COLORS[s]}`} />
             <span className="flex-1">{STATUS_LABELS[s]}</span>
             {(currentStatus || "online") === s && <Check className="h-3.5 w-3.5" />}
           </DropdownMenuItem>
@@ -91,7 +91,7 @@ export function StatusPicker({ currentStatus, statusText: initialText, onSet }: 
         <DropdownMenuSeparator />
         <div className="px-2 py-1.5">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-            <MessageCircle className="h-3 w-3" />
+            <MessageSquare className="h-3 w-3" />
             <span>Status personalizado</span>
           </div>
           {editingText ? (

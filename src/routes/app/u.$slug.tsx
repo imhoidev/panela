@@ -15,9 +15,9 @@ import { FriendButton } from "@/components/FriendButton";
 import {
   ArrowLeft, AtSign, MessageSquare, Activity,
   Server, Medal, Star, Users, MapPin,
-  Globe, Code2, Shield, Sparkles, Clock, Zap,
-  Linkedin, ExternalLink, Trophy, MessageCircle, Hash,
-  Camera, Music, Gamepad2, Play, Calendar,
+  Globe, Code, Shield, Sparkles, Clock, Zap,
+  Share2, ExternalLink, Trophy, Share, Hash,
+  Camera, Music, Gamepad, Disc, Calendar,
 } from "lucide-react";
 
 export const Route = createFileRoute("/app/u/$slug")({
@@ -32,8 +32,8 @@ const STATUS_MAP: Record<string, { label: string; dot: string }> = {
 };
 
 const SOCIAL_ICONS: Record<string, typeof Globe> = {
-  github: Code2, twitter: MessageCircle, linkedin: Linkedin,
-  instagram: Globe, youtube: Play, tiktok: Globe,
+  github: Code, twitter: Share, linkedin: Share2,
+  instagram: Camera, youtube: Disc, tiktok: Music,
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -87,20 +87,18 @@ function PublicProfile() {
       setProfile(profile);
       setTargetId(uid);
 
-      const [rolesRes, statsRes, friendsRes, xpRes] = await Promise.all([
+      const [rolesRes] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", uid),
-        supabase.from("profile_stats").select("*").eq("user_id", uid).maybeSingle(),
-        supabase.from("friends").select("id", { count: "exact", head: true })
-          .or(`user_id.eq.${uid},friend_id.eq.${uid}`).eq("status", "accepted"),
-        supabase.from("server_xp").select("xp, servers(name, icon_url, id)")
-          .eq("user_id", uid).order("xp", { ascending: false }).limit(10),
+        // statsRes - profile_stats table doesn't exist yet
+        // friendsRes - friends table doesn't exist yet
+        // xpRes - server_xp table doesn't exist yet
       ]);
 
       if (cancelled) return;
       setRoles((rolesRes.data ?? []).map((r: any) => r.role));
-      setStats(statsRes.data);
-      setFriendsCount(friendsRes.count ?? 0);
-      setServerXp(xpRes.data ?? []);
+      setStats(null);
+      setFriendsCount(0);
+      setServerXp([]);
 
       if (user) {
         const { data: mems } = await supabase.from("server_members").select("server_id").eq("user_id", uid);
@@ -209,7 +207,7 @@ function PublicProfile() {
           <div className="mt-2.5">
             <div className="flex items-center gap-2 flex-wrap">
               <div className="text-lg font-bold flex items-center gap-1.5">
-                <UsernameBadge profile={profile} roles={roles} />
+                <UsernameBadge profile={profile} roles={roles as ("user" | "admin" | "coo" | "ceo")[]} />
                 {profile.current_plan === "pro" && (
                   <Sparkles className="h-4 w-4 text-amber-400 fill-amber-400/30" />
                 )}
