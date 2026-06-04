@@ -605,7 +605,6 @@ function DMChat() {
           <span>{sendMode === "enter" ? "Enter para enviar, Shift + Enter para nova linha." : "Ctrl + Enter para enviar, Shift + Enter para nova linha."}</span>
           <span>{mobileExperience ? "Modo móvel ativado: controles maiores e toque facilitado." : "Toque para ativar controles móveis em configurações."}</span>
         </div>
-        </div>
       </form>
     </div>
   );
