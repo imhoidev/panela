@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { StatusPicker, StatusDot } from "@/components/PresenceStatus";
 import {
-  User, Shield, Info, Check, Bell, VolumeMute, Loader2, Copy, LogOut, MessageSquare,
+  User, Shield, Info, Check, Bell, Loader2, Copy, LogOut, MessageSquare,
 } from "lucide-react";
 
 export const Route = createFileRoute("/app/settings")({
@@ -273,7 +273,7 @@ function PushNotificationsCard() {
       <h2 className="font-semibold">Notificações Push</h2>
       <p className="text-sm text-muted-foreground">Receba notificações mesmo com o PANELA fechado.</p>
       <Button variant={subscribed ? "outline" : "default"} disabled={loading} onClick={toggle}>
-        {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : subscribed ? <VolumeMute className="h-4 w-4 mr-1" /> : <Bell className="h-4 w-4 mr-1" />}
+        {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Bell className={`h-4 w-4 mr-1 ${subscribed ? "text-muted-foreground" : "text-primary"}`} />}
         {subscribed ? "Desativar notificações" : "Ativar notificações"}
       </Button>
     </Card>
