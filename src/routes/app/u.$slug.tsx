@@ -15,9 +15,9 @@ import { FriendButton } from "@/components/FriendButton";
 import {
   ArrowLeft, AtSign, MessageSquare, Activity,
   Server, Medal, Star, Users, MapPin,
-  Globe, Github, Shield, Sparkles, Clock, Zap,
-  Linkedin, ExternalLink, Trophy, Twitter, Hash,
-  Camera, Music, Gamepad2, Youtube, Calendar,
+  Globe, Code2, Shield, Sparkles, Clock, Zap,
+  Linkedin, ExternalLink, Trophy, MessageCircle, Hash,
+  Camera, Music, Gamepad2, Play, Calendar,
 } from "lucide-react";
 
 export const Route = createFileRoute("/app/u/$slug")({
@@ -32,8 +32,8 @@ const STATUS_MAP: Record<string, { label: string; dot: string }> = {
 };
 
 const SOCIAL_ICONS: Record<string, typeof Globe> = {
-  github: Github, twitter: Twitter, linkedin: Linkedin,
-  instagram: Globe, youtube: Youtube, tiktok: Globe,
+  github: Code2, twitter: MessageCircle, linkedin: Linkedin,
+  instagram: Globe, youtube: Play, tiktok: Globe,
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
