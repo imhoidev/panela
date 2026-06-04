@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UsernameBadge } from "@/components/UsernameBadge";
 import { Button } from "@/components/ui/button";
 import { useRealtimeSocket } from "@/hooks/useRealtime";
-import { SendHorizontal, Paperclip, X, Trash2, CornerUpLeft, Loader2, ArrowDown, RefreshCcw, Slash, ShieldOff } from "lucide-react";
+import { SendHorizontal, Paperclip, X, Trash2, CornerUpLeft, Loader2, ArrowDown, RefreshCcw, Slash, ShieldOff, Bell } from "lucide-react";
 import { toast } from "sonner";
 
 type DM = {
@@ -402,7 +402,7 @@ function DMChat() {
         </div>
         <div className="mt-3 px-4 flex flex-wrap items-center gap-2">
           <Button variant="ghost" size="sm" className="gap-2" onClick={() => setIsMuted((current) => !current)}>
-            {isMuted ? <BellOff className="h-4 w-4" /> : <BellOff className="h-4 w-4" />} {isMuted ? "Desativar som" : "Silenciar"}
+            <Bell className="h-4 w-4" /> {isMuted ? "Desativar som" : "Silenciar"}
           </Button>
           <Button variant="ghost" size="sm" className="gap-2" onClick={() => load()}>
             <RefreshCcw className="h-4 w-4" /> Atualizar
