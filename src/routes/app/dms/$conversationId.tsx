@@ -5,11 +5,12 @@ import remarkGfm from "remark-gfm";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UsernameBadge } from "@/components/UsernameBadge";
 import { Button } from "@/components/ui/button";
 import { useRealtimeSocket } from "@/hooks/useRealtime";
-import { SendHorizontal, Paperclip, X, Trash2, CornerUpLeft, Loader2, ArrowDown } from "lucide-react";
+import { SendHorizontal, Paperclip, X, Trash2, CornerUpLeft, Loader2, ArrowDown, RefreshCcw, Slash, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 
 type DM = {
@@ -50,6 +51,8 @@ function DMChat() {
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [conversationParticipants, setConversationParticipants] = useState<any[]>([]);
+  const [groupTitle, setGroupTitle] = useState("Chat privado");
   const [otherProfile, setOtherProfile] = useState<any>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -57,6 +60,10 @@ function DMChat() {
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
   const [otherStatus, setOtherStatus] = useState("offline");
+  const [sendMode, setSendMode] = useState<"enter" | "ctrlEnter">("enter");
+  const [mobileExperience, setMobileExperience] = useState(false);
+  const [compactMode, setCompactMode] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -64,7 +71,7 @@ function DMChat() {
   const prevScrollHeight = useRef(0);
   const { socket } = useRealtimeSocket();
   const lastTypingSent = useRef(0);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const knownIds = useRef<Set<string>>(new Set());
   const scrollTimeout = useRef<ReturnType<typeof setTimeout>>();
 
@@ -77,16 +84,25 @@ function DMChat() {
     const authors: string[] = [];
 
     const { data: parts } = await supabase.rpc("get_dm_participants_single", { conv_id: conversationId });
-    const pIds = (parts ?? []).map((p: any) => p.user_id);
+    const participants = parts ?? [];
+    setConversationParticipants(participants);
+    const pIds = participants.map((p: any) => p.user_id);
     authors.push(...pIds);
-    const otherId = pIds.find((id) => id !== user?.id);
 
-    if (otherId) {
+    const otherParticipants = participants.filter((p: any) => p.user_id !== user?.id);
+    const otherId = otherParticipants[0]?.user_id;
+    if (otherParticipants.length === 1) {
       const { data: prof } = await supabase
         .from("profiles")
         .select("id,username,display_name,avatar_url,name_color,name_colors,name_effect,current_plan")
         .eq("id", otherId).maybeSingle();
       if (prof) { profilesCache.current.set(prof.id, prof); setOtherProfile(prof); }
+      setGroupTitle(prof?.display_name || prof?.username || "Chat privado");
+    } else if (otherParticipants.length > 1) {
+      const participantNames = otherParticipants.slice(0, 3).map((p: any) => profilesCache.current.get(p.user_id)?.display_name || profilesCache.current.get(p.user_id)?.username || "Usuário");
+      setGroupTitle(`${participantNames.join(", ")} ${otherParticipants.length > 3 ? `+${otherParticipants.length - 3}` : ""}`.trim());
+    } else {
+      setGroupTitle("Chat privado");
     }
 
     const { data: msgs } = await supabase
@@ -101,6 +117,10 @@ function DMChat() {
         .select("id,username,display_name,avatar_url,name_color,name_colors,name_effect,current_plan")
         .in("id", [...new Set(authors)]);
       (profs ?? []).forEach((p: any) => profilesCache.current.set(p.id, p));
+      if (otherParticipants.length > 1) {
+        const participantNames = otherParticipants.slice(0, 3).map((p: any) => profilesCache.current.get(p.user_id)?.display_name || profilesCache.current.get(p.user_id)?.username || "Usuário");
+        setGroupTitle(`${participantNames.join(", ")} ${otherParticipants.length > 3 ? `+${otherParticipants.length - 3}` : ""}`.trim());
+      }
     }
     setMessages(list);
     setHasMore(list.length >= 100);
@@ -118,6 +138,24 @@ function DMChat() {
   }, [conversationId]);
 
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setSendMode((localStorage.getItem("panela:dmSendMode") as "enter" | "ctrlEnter") || "enter");
+    setMobileExperience(localStorage.getItem("panela:dmMobileGestures") === "true");
+    setCompactMode(localStorage.getItem("panela:dmCompactChats") === "true");
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("panela:dmSendMode", sendMode);
+  }, [sendMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("panela:dmMobileGestures", String(mobileExperience));
+    localStorage.setItem("panela:dmCompactChats", String(compactMode));
+  }, [mobileExperience, compactMode]);
 
   // Infinite scroll
   useEffect(() => {
@@ -286,7 +324,7 @@ function DMChat() {
     socket.emit("dm:typing:start", { conversationId, username: user?.email || "Você" });
   }
 
-  async function send(e: React.FormEvent) {
+  async function send(e: React.FormEvent | React.KeyboardEvent) {
     e.preventDefault();
     if (!user || !text.trim() || sending) return;
     const content = text.trim(); const reply = replyTo?.id ?? null; setText(""); setReplyTo(null);
@@ -338,22 +376,43 @@ function DMChat() {
 
   return (
     <div className="flex flex-col h-full relative">
-      <header className="h-12 border-b border-border px-4 flex items-center gap-2.5 bg-card/30 backdrop-blur shrink-0">
-        <Link to="/app/u/$slug" params={{ slug: other?.id || "" }} className="shrink-0">
-          <div className="relative">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={other?.avatar_url ?? undefined} />
-              <AvatarFallback>{other?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
-            </Avatar>
-            <span className={`absolute -bottom-0.5 -right-0.5 h-[10px] w-[10px] rounded-full border-2 border-card ${statusDot}`} />
+      <header className="pb-3 border-b border-border bg-card/70 backdrop-blur-sm sticky top-0 z-10">
+        <div className="flex items-center gap-3 px-4 pt-3">
+          <div className="relative shrink-0">
+            <div className="flex items-center gap-[-0.4rem]">
+              {conversationParticipants.filter((p) => p.user_id !== user?.id).slice(0, 3).map((participant: any, idx: number) => {
+                const profile = profilesCache.current.get(participant.user_id) ?? null;
+                return (
+                  <Avatar key={participant.user_id} className={`h-9 w-9 ring-2 ring-card ${idx > 0 ? "-ml-3" : ""}`}>
+                    <AvatarImage src={profile?.avatar_url ?? undefined} />
+                    <AvatarFallback>{profile?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
+                  </Avatar>
+                );
+              })}
+            </div>
+            <span className={`absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-card ${statusDot}`} />
           </div>
-        </Link>
-        <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{other?.display_name || other?.username || "Carregando..."}</p>
-          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-            <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
-            {otherStatus === "online" ? "Online" : otherStatus === "idle" ? "Ausente" : otherStatus === "dnd" ? "Ocupado" : "Offline"}
-          </p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold truncate">{conversationParticipants.length > 2 ? groupTitle : other?.display_name || other?.username || "Carregando..."}</p>
+            <div className="text-[10px] text-muted-foreground flex flex-wrap gap-2">
+              <span className={`inline-flex items-center gap-1 ${statusDot}`}>{conversationParticipants.length > 2 ? `${conversationParticipants.length} participantes` : otherStatus === "online" ? "Online" : otherStatus === "idle" ? "Ausente" : otherStatus === "dnd" ? "Ocupado" : "Offline"}</span>
+              <span className="inline-flex items-center gap-1 text-muted-foreground/70">{conversationParticipants.length > 2 ? "Grupo" : "Mensagem direta"}</span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 px-4 flex flex-wrap items-center gap-2">
+          <Button variant="ghost" size="sm" className="gap-2" onClick={() => setIsMuted((current) => !current)}>
+            {isMuted ? <BellOff className="h-4 w-4" /> : <BellOff className="h-4 w-4" />} {isMuted ? "Desativar som" : "Silenciar"}
+          </Button>
+          <Button variant="ghost" size="sm" className="gap-2" onClick={() => load()}>
+            <RefreshCcw className="h-4 w-4" /> Atualizar
+          </Button>
+          <Button variant="ghost" size="sm" className="gap-2" onClick={() => setMobileExperience((prev) => !prev)}>
+            <Slash className="h-4 w-4" /> {mobileExperience ? "Modo móvel" : "Experiência touch"}
+          </Button>
+          <Button variant="ghost" size="sm" className="gap-2" onClick={() => setCompactMode((prev) => !prev)}>
+            <ShieldOff className="h-4 w-4" /> {compactMode ? "Compacto" : "Expandir"}
+          </Button>
         </div>
       </header>
 
@@ -401,7 +460,7 @@ function DMChat() {
                     </Avatar>
                   </Link>
                 ) : <div className="w-8 shrink-0" />}
-                <div className={`min-w-0 max-w-[75%] flex flex-col ${isMine ? "items-end" : ""}`}>
+                <div className={`min-w-0 flex flex-col ${compactMode ? "max-w-[85%]" : "max-w-[75%]"} ${isMine ? "items-end" : ""}`}>
                   {!isMine && !sameAuthor && profile && (
                     <Link to="/app/u/$slug" params={{ slug: m.author_id }}
                       className="text-xs font-medium mb-0.5 ml-1 hover:underline">
@@ -417,7 +476,7 @@ function DMChat() {
                       <span className="truncate text-muted-foreground/80">{replied.content}</span>
                     </div>
                   )}
-                  <div className={`rounded-2xl px-3.5 py-2 text-sm ${
+                  <div className={`rounded-2xl text-sm ${compactMode ? "px-3 py-2" : "px-3.5 py-2.5"} ${
                     isMine ? "bg-primary text-primary-foreground rounded-br-md" : "bg-accent rounded-bl-md"
                   }`}>
                     {m.content && (
@@ -480,6 +539,22 @@ function DMChat() {
         )}
       </div>
 
+      {mobileExperience && (
+        <div className="md:hidden sticky bottom-0 left-0 right-0 z-20 border-t border-border bg-background/90 backdrop-blur-sm px-3 py-3">
+          <div className="grid grid-cols-3 gap-2">
+            <button type="button" onClick={() => fileRef.current?.click()} className="rounded-2xl border border-border bg-accent/70 py-3 text-[12px] font-medium text-foreground hover:bg-accent transition">
+              <Paperclip className="mx-auto mb-1 h-4 w-4" /> Anexar
+            </button>
+            <button type="button" onClick={() => setReplyTo(messages[messages.length - 1] ?? null)} className="rounded-2xl border border-border bg-accent/70 py-3 text-[12px] font-medium text-foreground hover:bg-accent transition">
+              <CornerUpLeft className="mx-auto mb-1 h-4 w-4" /> Responder
+            </button>
+            <button type="button" onClick={() => scrollToBottom()} className="rounded-2xl border border-border bg-primary text-primary-foreground py-3 text-[12px] font-medium hover:bg-primary/90 transition">
+              <ArrowDown className="mx-auto mb-1 h-4 w-4" /> Baixar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Scroll to bottom */}
       {showScrollBtn && (
         <button onClick={() => scrollToBottom()}
@@ -504,18 +579,32 @@ function DMChat() {
           <button type="button" onClick={() => fileRef.current?.click()} className="text-muted-foreground/50 hover:text-foreground p-1.5 shrink-0 transition-colors">
             <Paperclip className="h-5 w-5" />
           </button>
-          <Input
+          <Textarea
             ref={inputRef}
             value={text}
             onChange={(e) => { setText(e.target.value); emitTyping(); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && sendMode === "enter") {
+                e.preventDefault(); send(e);
+              }
+              if (e.key === "Enter" && e.ctrlKey && sendMode === "ctrlEnter") {
+                e.preventDefault(); send(e);
+              }
+            }}
             placeholder="Mensagem..."
-            className="bg-transparent border-0 h-10 sm:h-11 flex-1 min-w-0 px-1.5 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm"
+            rows={2}
+            className={`bg-transparent border-0 resize-none flex-1 min-w-0 px-1.5 focus-visible:ring-0 focus-visible:ring-offset-0 text-sm ${compactMode ? "py-2" : "py-3"}`} 
             maxLength={2000}
           />
           <button type="submit" disabled={!text.trim() || sending}
             className="text-primary/60 hover:text-primary disabled:opacity-25 p-1.5 shrink-0 transition-colors disabled:cursor-not-allowed">
             <SendHorizontal className="h-5 w-5" />
           </button>
+        </div>
+        <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+          <span>{sendMode === "enter" ? "Enter para enviar, Shift + Enter para nova linha." : "Ctrl + Enter para enviar, Shift + Enter para nova linha."}</span>
+          <span>{mobileExperience ? "Modo móvel ativado: controles maiores e toque facilitado." : "Toque para ativar controles móveis em configurações."}</span>
+        </div>
         </div>
       </form>
     </div>

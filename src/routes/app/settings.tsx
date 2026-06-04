@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
@@ -24,11 +26,36 @@ function Settings() {
   const [statusText, setStatusText] = useState(profile?.status_text ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [sendMode, setSendMode] = useState<"enter" | "ctrlEnter">("enter");
+  const [mobileGestures, setMobileGestures] = useState(false);
+  const [compactChats, setCompactChats] = useState(false);
 
   useEffect(() => {
     setDisplayName(profile?.display_name ?? "");
     setStatusText(profile?.status_text ?? "");
   }, [profile]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setSendMode((localStorage.getItem("panela:dmSendMode") as "enter" | "ctrlEnter") || "enter");
+    setMobileGestures(localStorage.getItem("panela:dmMobileGestures") === "true");
+    setCompactChats(localStorage.getItem("panela:dmCompactChats") === "true");
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("panela:dmSendMode", sendMode);
+  }, [sendMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("panela:dmMobileGestures", String(mobileGestures));
+  }, [mobileGestures]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("panela:dmCompactChats", String(compactChats));
+  }, [compactChats]);
 
   async function saveProfile() {
     setSaving(true);
@@ -104,6 +131,59 @@ function Settings() {
           <Button variant="destructive" size="sm" onClick={signOut} className="gap-1.5">
             <LogOut className="h-3.5 w-3.5" /> Sair
           </Button>
+        </div>
+      </Card>
+
+      {/* Chat preferences */}
+      <Card className="p-5 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold flex items-center gap-2"><MessageSquare className="h-4 w-4 text-primary" /> Preferências de chat</h2>
+            <p className="text-sm text-muted-foreground">Ajuste o comportamento do bate-papo, o modo móvel e a visão compacta das DMs.</p>
+          </div>
+          <Badge variant="outline">Avançado</Badge>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Enviar com</Label>
+            <Select value={sendMode} onValueChange={setSendMode}>
+              <SelectTrigger className="w-full h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="enter">Enter para enviar</SelectItem>
+                <SelectItem value="ctrlEnter">Ctrl + Enter para enviar</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Defina como você prefere enviar mensagens no chat.</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Interface móvel</Label>
+            <div className="flex items-center justify-between rounded-2xl border border-border p-3">
+              <div>
+                <p className="text-sm font-medium">Gestos e atalhos</p>
+                <p className="text-xs text-muted-foreground">Botões de ação adaptados para celular.</p>
+              </div>
+              <Switch checked={mobileGestures} onCheckedChange={setMobileGestures} />
+            </div>
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <div className="flex items-center justify-between rounded-2xl border border-border p-3">
+              <div>
+                <p className="text-sm font-medium">Modo compacto</p>
+                <p className="text-xs text-muted-foreground">Mensagens mais densas com foco no conteúdo.</p>
+              </div>
+              <Switch checked={compactChats} onCheckedChange={setCompactChats} />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-primary/20 bg-primary/10 p-4 text-sm text-primary-foreground">
+          <p className="font-medium">Dica de chat</p>
+          <p className="mt-1 text-xs text-primary-foreground/90">Use o modo móvel para ativar pontos de toque maiores e interações rápidas. O modo compacto economiza espaço, ideal para conversas longas e telas menores.</p>
         </div>
       </Card>
 

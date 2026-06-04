@@ -43,7 +43,6 @@ function DMLayout() {
       .in("id", convIds)
       .order("last_message_at", { ascending: false, nullsFirst: false });
 
-    // Use SECURITY DEFINER function to get all participants (bypasses RLS)
     const { data: allParts } = await supabase.rpc("get_dm_participants", { conv_ids: convIds });
     const partsByConv = new Map<string, any[]>();
     (allParts ?? []).forEach((p: any) => {
@@ -51,18 +50,40 @@ function DMLayout() {
       arr.push(p); partsByConv.set(p.conversation_id, arr);
     });
 
+    const allIds = new Set<string>();
     const mapped = (convs ?? []).map((c: any) => {
       const participants = partsByConv.get(c.id) ?? [];
-      return { ...c, other: participants.find((p: any) => p.user_id !== user.id) ?? null };
+      participants.forEach((p: any) => allIds.add(p.user_id));
+      const others = participants.filter((p: any) => p.user_id !== user.id);
+      return {
+        ...c,
+        participants,
+        others,
+        isGroup: participants.length > 2,
+        title: "Carregando...",
+        preview: c.last_message_preview || "Nenhuma mensagem ainda",
+      };
     });
-    setConversations(mapped);
 
-    const otherIds = [...new Set(mapped.map((c: any) => c.other?.user_id).filter(Boolean))];
-    if (otherIds.length) {
-      const { data: profs } = await supabase.from("profiles").select("id,username,display_name,avatar_url").in("id", otherIds);
+    if (allIds.size) {
+      const { data: profs } = await supabase.from("profiles").select("id,username,display_name,avatar_url").in("id", [...allIds]);
       const m = new Map(profs?.map((p: any) => [p.id, p]) ?? []);
       setProfiles(m);
+      setConversations(mapped.map((c: any) => {
+        const names = (c.others ?? []).map((p: any) => m.get(p.user_id)?.display_name || m.get(p.user_id)?.username || "Usuário");
+        const title = names.length === 0 ? "Conversação" : names.length === 1 ? names[0] : `${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2}` : ""}`;
+        return {
+          ...c,
+          title,
+          preview: c.last_message_preview || "Nenhuma mensagem ainda",
+          participantsProfiles: c.participants.map((p: any) => m.get(p.user_id) ?? null),
+          other: c.others[0] ?? null,
+        };
+      }));
+    } else {
+      setConversations(mapped);
     }
+
     if (showLoader) setLoading(false);
   }
 
@@ -77,14 +98,29 @@ function DMLayout() {
     const { data: conv } = await supabase.from("dm_conversations").select("*").eq("id", convId).single();
     if (!conv) return;
     const { data: parts } = await supabase.rpc("get_dm_participants_single", { conv_id: convId });
-    const other = (parts ?? []).find((p: any) => p.user_id !== user.id);
-    const otherId = other?.user_id;
-    const newConv = { ...conv, other: other ?? null };
-    if (otherId) {
-      const { data: prof } = await supabase.from("profiles")
-        .select("id,username,display_name,avatar_url").eq("id", otherId).maybeSingle();
-      if (prof) setProfiles((prev) => new Map(prev).set(prof.id, prof));
+    const participants = parts ?? [];
+    const otherParticipants = participants.filter((p: any) => p.user_id !== user.id);
+    const ids = [...new Set(participants.map((p: any) => p.user_id))];
+    if (ids.length) {
+      const { data: profs } = await supabase.from("profiles")
+        .select("id,username,display_name,avatar_url").in("id", ids);
+      if (profs) profs.forEach((prof: any) => setProfiles((prev) => new Map(prev).set(prof.id, prof)));
     }
+    const names = otherParticipants.map((p: any) => {
+      const prof = profiles.get(p.user_id);
+      return prof?.display_name || prof?.username || "Usuário";
+    });
+    const title = names.length === 0 ? "Conversação" : names.length === 1 ? names[0] : `${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2}` : ""}`;
+    const newConv = {
+      ...conv,
+      participants,
+      others: otherParticipants,
+      isGroup: participants.length > 2,
+      title,
+      preview: conv.last_message_preview || "Nenhuma mensagem ainda",
+      participantsProfiles: participants.map((p: any) => profiles.get(p.user_id) ?? null),
+      other: otherParticipants[0] ?? null,
+    };
     setConversations((prev) => {
       if (prev.some((c) => c.id === convId)) return prev;
       return [...prev, newConv].sort((a, b) => new Date(b.last_message_at || 0).getTime() - new Date(a.last_message_at || 0).getTime());
@@ -119,9 +155,8 @@ function DMLayout() {
   const inChat = loc.pathname.match(/^\/app\/dms\/[^/]+$/);
   const filtered = conversations.filter((c: any) => {
     if (!search) return true;
-    const p = profiles.get(c.other?.user_id);
-    return p?.username?.toLowerCase().includes(search.toLowerCase()) ||
-           p?.display_name?.toLowerCase().includes(search.toLowerCase());
+    const title = String(c.title || "").toLowerCase();
+    return title.includes(search.toLowerCase());
   });
 
   function timeAgo(date: string) {
@@ -155,25 +190,39 @@ function DMLayout() {
       </div>
       <div className="flex-1 overflow-auto p-2 space-y-0.5">
         {filtered.map((c: any) => {
-          const p = profiles.get(c.other?.user_id);
           const active = loc.pathname === `/app/dms/${c.id}`;
           const unread = hasUnread(c);
+          const title = c.title || "Carregando...";
+          const subtitle = c.isGroup ? `${c.participants?.length ?? 0} membros` : "Privado";
+          const avatars = (c.participantsProfiles ?? []).filter((p: any) => p?.id !== user.id).slice(0, 3);
           return (
             <Link key={c.id} to="/app/dms/$conversationId" params={{ conversationId: c.id }}
               className={`flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors ${
                 active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
               }`}>
               <div className="relative shrink-0">
-                <Avatar className={`h-9 w-9 ${unread ? "ring-2 ring-primary/50" : ""}`}>
-                  <AvatarImage src={p?.avatar_url ?? undefined} />
-                  <AvatarFallback>{p?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
-                </Avatar>
+                <div className="relative h-10 w-10">
+                  <div className="absolute inset-0 rounded-full bg-accent/80 ring-1 ring-border" />
+                  <div className="flex">
+                    {avatars.map((profile: any, idx: number) => (
+                      <Avatar key={profile?.id ?? idx} className={`h-8 w-8 ring-2 ring-card ${idx > 0 ? "-ml-2" : ""}`}>
+                        <AvatarImage src={profile?.avatar_url ?? undefined} />
+                        <AvatarFallback>{profile?.username?.[0]?.toUpperCase() ?? "?"}</AvatarFallback>
+                      </Avatar>
+                    ))}
+                    {!avatars.length && (
+                      <Avatar className="h-9 w-9">
+                        <AvatarFallback>?</AvatarFallback>
+                      </Avatar>
+                    )}
+                  </div>
+                </div>
                 {unread && <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-primary border-2 border-sidebar" />}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <p className={`truncate ${unread ? "font-semibold text-foreground" : "font-medium text-foreground/90"}`}>
-                    {p?.display_name || p?.username || "Carregando..."}
+                    {title}
                   </p>
                   {c.last_message_at && (
                     <span className={`text-[10px] shrink-0 ${unread ? "text-primary font-medium" : "text-muted-foreground/50"}`}>
@@ -182,8 +231,9 @@ function DMLayout() {
                   )}
                 </div>
                 <p className={`truncate text-xs ${unread ? "text-foreground/80 font-medium" : "opacity-60"}`}>
-                  {c.last_message_preview || "Nenhuma mensagem ainda"}
+                  {c.preview}
                 </p>
+                <p className="text-[10px] text-muted-foreground/60 mt-1">{subtitle}</p>
               </div>
             </Link>
           );
