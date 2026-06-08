@@ -13,6 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MemberList } from "@/components/MemberList";
 import { ServerRoles } from "@/components/ServerRoles";
+import { ServerRewardsTab } from "@/components/ServerRewardsTab";
 import { ServerStickers } from "@/components/ServerStickers";
 import { ServerOverviewTab } from "@/components/ServerOverviewTab";
 import { ServerMembersTab } from "@/components/ServerMembersTab";
@@ -659,6 +660,7 @@ function ServerSettingsPanel({ server, serverId, isOwner, canManage, canKick, ki
           <TabsTrigger value="members" className="text-xs gap-1"><Users className="h-3 w-3" />Membros</TabsTrigger>
           <TabsTrigger value="channels" className="text-xs gap-1"><Hash className="h-3 w-3" />Canais</TabsTrigger>
           <TabsTrigger value="roles" className="text-xs gap-1"><Shield className="h-3 w-3" />Cargos</TabsTrigger>
+          <TabsTrigger value="rewards" className="text-xs gap-1"><Crown className="h-3 w-3" />Recompensas</TabsTrigger>
           <TabsTrigger value="stickers" className="text-xs gap-1"><Sticker className="h-3 w-3" />Figurinhas</TabsTrigger>
         </TabsList>
       </div>
@@ -675,6 +677,9 @@ function ServerSettingsPanel({ server, serverId, isOwner, canManage, canKick, ki
         </TabsContent>
         <TabsContent value="roles" className="mt-0 space-y-3">
           <ServerRoles serverId={serverId} canManage={canManage} />
+        </TabsContent>
+        <TabsContent value="rewards" className="mt-0 space-y-3">
+          <ServerRewardsTab serverId={serverId} canManage={canManage} />
         </TabsContent>
         <TabsContent value="stickers" className="mt-0 space-y-3">
           <ServerStickers serverId={serverId} canManage={canManage} />

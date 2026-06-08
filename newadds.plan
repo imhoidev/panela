@@ -1,0 +1,853 @@
+================================================================================
+                    ULTRA PLANO DE MELHORIAS E REFATORAÇÃO
+                            analog-aura-connect
+================================================================================
+  Gerado em: 08/06/2026
+  Versão do plano: 1.0
+  Cobre: Chat, Server, DMs, Perfil, XP, Realtime, Cargos, Convites
+================================================================================
+
+ÍNDICE
+--------------------------------------------------------------------------------
+  FASE 0 — Fundação (Infra, Hooks, Schemas)
+  FASE 1 — Chat System (Canal de Texto)
+  FASE 2 — Server Creation & Settings
+  FASE 3 — Role System & Permission Matrix
+  FASE 4 — XP System & Server Rewards
+  FASE 5 — Realtime Engine (Presença + Eventos)
+  FASE 6 — DMs System (Mensagens Diretas)
+  FASE 7 — User Profile (app/u/)
+  FASE 8 — Invite System
+  FASE 9 — Ferramentas de Moderação
+  FASE 10 — Performance, Acessibilidade, Testes
+
+================================================================================
+FASE 0 — FUNDAÇÃO (INFRA, HOOKS, SCHEMAS)
+================================================================================
+Prioridade: CRÍTICA (pré-requisito para todas as outras fases)
+Dependências: Nenhuma
+Esforço estimado: 3-5 dias
+
+0.1  MIGRATION: LEVEL REWARDS TABLE
+───────────────────────────────────────────────────────────────────────────────
+  • Criar tabela `server_level_rewards`:
+      id UUID PK DEFAULT gen_random_uuid()
+      server_id UUID FK → servers(id) ON DELETE CASCADE
+      level_threshold INTEGER NOT NULL         -- level do XP que ativa a recompensa
+      reward_type TEXT NOT NULL CHECK (reward_type IN ('role', 'item', 'custom'))
+      reward_value TEXT NOT NULL                -- role_id UUID ou descrição
+      message TEXT DEFAULT NULL                 -- mensagem exibida ao atingir
+      created_at TIMESTAMPTZ DEFAULT now()
+      UNIQUE(server_id, level_threshold, reward_type)
+  • RLS: SELECT para membros, ALL para level >= 80
+  • Publicar no supabase_realtime
+
+0.2  MIGRATION: SERVER_ACHIEVEMENTS
+───────────────────────────────────────────────────────────────────────────────
+  • Criar tabela `server_achievements`:
+      id UUID PK
+      server_id UUID FK
+      user_id UUID FK
+      achievement_key TEXT      -- ex: "first_message", "100_messages", "1_year"
+      unlocked_at TIMESTAMPTZ DEFAULT now()
+      UNIQUE(server_id, user_id, achievement_key)
+  • RLS: SELECT para membros, INSERT via função SECURITY DEFINER
+
+0.3  MIGRATION: MESSAGE_BOOKMARKS (PIN GLOBAL)
+───────────────────────────────────────────────────────────────────────────────
+  • Criar tabela `message_bookmarks`:
+      id UUID PK
+      user_id UUID FK
+      message_id UUID FK → messages(id) ON DELETE CASCADE
+      note TEXT
+      created_at TIMESTAMPTZ DEFAULT now()
+      UNIQUE(user_id, message_id)
+  • RLS: ALL próprio usuário
+
+0.4  MIGRATION: CHANNEL_TOPIC_HISTORY
+───────────────────────────────────────────────────────────────────────────────
+  • Adicionar coluna `topic_updated_at` em channels
+  • Criar tabela `channel_topic_history` para versionamento de tópico
+  • RLS: SELECT para membros
+
+0.5  NOVOS HOOKS CENTRALIZADOS
+───────────────────────────────────────────────────────────────────────────────
+  • src/hooks/servers/useServerQueries.ts — ADICIONAR:
+      useServerXP(serverId, userId)          → fetch + cache de server_xp
+      useServerXPRewards(serverId)           → fetch level_rewards
+      useServerAchievements(serverId, userId) → fetch achievements
+      useServerLeaderboard(serverId)         → top XP members
+      useServerBookmarks(userId)             → message bookmarks
+      useChannelTopicHistory(channelId)      → topic versions
+
+  • src/hooks/servers/useServerMutations.ts — ADICIONAR:
+      useAddXPReward(serverId)               → INSERT level_reward
+      useRemoveXPReward(serverId)            → DELETE level_reward
+      useAwardAchievement(serverId)          → INSERT achievement
+      useToggleBookmark(userId)              → upsert bookmark
+      useUpdateTopic(channelId)              → UPDATE topic + versionar
+
+  • src/hooks/useChat.ts — NOVO HOOK:
+      Unifica toda a lógica de chat (mensagens, realtime, paginação,
+      reações, typing, upload) em um único hook reutilizável entre
+      server channels e DMs.
+
+0.6  NOVOS COMPONENTES BASE
+───────────────────────────────────────────────────────────────────────────────
+  • src/components/ui/emoji-picker.tsx        — Emoji picker completo
+  • src/components/ui/file-upload.tsx         — Drag & drop com preview
+  • src/components/ui/user-mention.tsx        — Componente de @menção
+  • src/components/ui/channel-mention.tsx     — Componente de #canal
+  • src/components/ui/timestamp.tsx           — Timestamp inteligente
+  • src/components/ui/progress-bar.tsx        — Barra de progresso animada
+  • src/components/ui/leaderboard.tsx         — Tabela de classificação
+  • src/components/ui/avatar-upload.tsx       — Upload com crop/zoom
+
+0.7  SCHEMA.SQL — ATUALIZAÇÃO COMPLETA
+───────────────────────────────────────────────────────────────────────────────
+  • Adicionar todas as novas tabelas, RLS, índices, triggers
+  • Adicionar buckets storage: emojis, level-reward-icons
+  • Adicionar publication supabase_realtime para novas tabelas
+
+
+================================================================================
+FASE 1 — CHAT SYSTEM (CANAL DE TEXTO)
+================================================================================
+Prioridade: ALTA
+Dependências: Fase 0
+Esforço estimado: 7-10 dias
+
+1.1  REFATORAR PARA TANSTACK QUERY
+───────────────────────────────────────────────────────────────────────────────
+  • Substituir useState<Msg[]> + load() manual por useInfiniteQuery
+  • QueryKey: ["messages", channelId, { threadRoot }]
+  • Paginação: cursor-based com created_at
+  • Cache de perfis de autores via useQueries concorrente
+  • Substituir setMessages manual por queryClient.setQueryData
+
+1.2  VIRTUAL SCROLLING
+───────────────────────────────────────────────────────────────────────────────
+  • Implementar react-window ou @tanstack/react-virtual
+  • Estimar altura das mensagens (variável com attach/markdown)
+  • Scroll-to-bottom suave com IntersectionObserver
+  • Manter scroll position ao carregar histórico
+
+1.3  EDITOR DE TEXTO ENRIQUECIDO
+───────────────────────────────────────────────────────────────────────────────
+  • Substituir <textarea> por TipTap (prosemirror)
+  • Slash commands: /gif, /sticker, /spoiler, /me, /shrug
+  • Markdown shortcuts (**, *, `, ~~, >)
+  • Atalhos: Ctrl+B (bold), Ctrl+I (itálico), Ctrl+E (code block)
+  • Auto-complete: @username, #channel, :emoji:
+  • Preview inline de links (unfurling)
+  • Suporte a listas, blockquote, code blocks com syntax highlight
+
+1.4  FILE UPLOAD MELHORADO
+───────────────────────────────────────────────────────────────────────────────
+  • Drag & drop zone sobre toda a área de mensagens
+  • Preview antes de enviar (imagem/vídeo/áudio)
+  • Barra de progresso individual por arquivo
+  • Upload simultâneo de múltiplos arquivos
+  • Limite de tamanho com indicação visual
+  • Upload cancelável via AbortController
+  • Thumbnail para imagens grandes
+
+1.5  REAÇÕES EXPANDIDAS
+───────────────────────────────────────────────────────────────────────────────
+  • Emoji picker completo ao clicar "+" nas reações
+  • Reações animadas (pop-in ao adicionar)
+  • Super reações (destaque com cor, PRO feature)
+  • Lista de quem reagiu (tooltip com avatares)
+  • Limite de reações por mensagem configurável
+
+1.6  REPLY & THREAD AVANÇADO
+───────────────────────────────────────────────────────────────────────────────
+  • Reply com quote visual (linha azul + preview do conteúdo)
+  • Thread sidebar: lista de threads ativas no canal
+  • Notificação de nova resposta na thread
+  • Thread auto-follow ao responder
+  • Thread preview inline (última mensagem)
+
+1.7  MESSAGE SEARCH
+───────────────────────────────────────────────────────────────────────────────
+  • Search bar no cabeçalho do canal
+  • Filtros: de/para usuário, antes/depois de data, attachments
+  • Resultados com highlight do termo buscado
+  • Navegação entre resultados (setas)
+
+1.8  MESSAGE ACTIONS MENU
+───────────────────────────────────────────────────────────────────────────────
+  • Menu contextual (três pontos) em cada mensagem com:
+      - Copiar texto
+      - Copiar link da mensagem
+      - Pin/Unpin
+      - Bookmark (salvar)
+      - Reportar
+      - Editar (se own)
+      - Excluir (se own ou mod)
+  • Keyboard shortcuts: ↑ editar última, E editar, Del excluir
+
+1.9  TIMESTAMPS INTELIGENTES
+───────────────────────────────────────────────────────────────────────────────
+  • Hoje: "14:32"
+  • Ontem: "Ontem às 14:32"
+  • Esta semana: "segunda às 14:32"
+  • Este ano: "2 jun às 14:32"
+  • Anos anteriores: "2 jun 2025"
+  • Date separator: "--- 2 de junho de 2026 ---" entre dias
+
+1.10 MESSAGE GROUPING
+───────────────────────────────────────────────────────────────────────────────
+  • Agrupar mensagens consecutivas do mesmo autor (< 5 min)
+  • Mostrar avatar + nome apenas na primeira do grupo
+  • Pequeno timestamp na lateral das mensagens agrupadas
+  • Hover no timestamp expande para hora completa
+
+1.11 MODO COMPACTO / CONFORTÁVEL
+───────────────────────────────────────────────────────────────────────────────
+  • Alternância no cabeçalho do chat
+  • Compacto: avatar pequeno, padding reduzido, fonte menor
+  • Confortável: avatar grande, padding generoso
+  • Persistir preferência em localStorage
+
+1.12 SPOILER SUPPORT
+───────────────────────────────────────────────────────────────────────────────
+  • Suporte a ||texto escondido|| no markdown
+  • Click para revelar
+  • Efeito de blur + revelação animada
+
+1.13 LINK UNFURLING
+───────────────────────────────────────────────────────────────────────────────
+  • Detectar links na mensagem e buscar preview (OG tags)
+  • Cache de previews em tabela `link_previews`
+  • Fallback: mostrar URL encurtada
+
+
+================================================================================
+FASE 2 — SERVER CREATION & SETTINGS
+================================================================================
+Prioridade: ALTA
+Dependências: Fase 0
+Esforço estimado: 5-7 dias
+
+2.1  CRIAÇÃO MULTI-ETAPAS (WIZARD)
+───────────────────────────────────────────────────────────────────────────────
+  • Etapa 1: Nome + Ícone (avatar upload com crop)
+  • Etapa 2: Slug + Descrição + Privacidade (com preview do slug)
+  • Etapa 3: Templates — "Gaming", "Comunidade", "Estudo", "Vazio"
+  • Etapa 4: Canais sugeridos baseados no template
+  • Etapa 5: Cargos sugeridos baseados no template
+  • Barra de progresso do wizard
+  • Botão "Pular" em cada etapa
+
+2.2  TEMPLATES DE SERVER
+───────────────────────────────────────────────────────────────────────────────
+  • Gaming: canais #partidas, #lfg, #clips; cargos @Mestre, @Jogador
+  • Comunidade: canais #apresentações, #off-topic; cargos @Veterano, @Novato
+  • Estudo: canais #provas, #grupos; cargos @Monitor, @Estudante
+  • Template engine: JSON configurável com canais e cargos pré-definidos
+
+2.3  SERVER OVERVIEW — ANALYTICS
+───────────────────────────────────────────────────────────────────────────────
+  • Gráfico de membros ao longo do tempo (recharts)
+  • Contagem de mensagens por dia/semana
+  • Top canais por atividade
+  • Taxa de crescimento (novos membros vs saídas)
+  • Cards de estatística: total membros, mensagens hoje, online agora
+
+2.4  CHANNELS TAB — GESTÃO VISUAL
+───────────────────────────────────────────────────────────────────────────────
+  • Drag & drop entre categorias (mover canal arrastando)
+  • Badge de tipo de canal (ícone + cor)
+  • Menu de criação rápida de categoria
+  • Duplicar canal (copia permissões)
+  • Channel sync: espelhar permissões de um canal em outro
+
+2.5  MEMBERS TAB — AÇÕES EM MASSA
+───────────────────────────────────────────────────────────────────────────────
+  • Checkbox multiplo para selecionar membros
+  • Ação em lote: kick, ban, assign role, change level
+  • Filtros combinados: role + level + status + pesquisa
+  • Coluna de última atividade (timestamp)
+
+2.6  SETTINGS TAB — GERAL
+───────────────────────────────────────────────────────────────────────────────
+  • Moderação: palavras bloqueadas (regex), automod config
+  • Verificação: nível mínimo de conta, verificação de email
+  • Notificações: @everyone permissão, @role permissão
+  • Banner do servidor (upload com preview)
+  • Focus tags (seleção de tags temáticas)
+
+2.7  STICKERS & EMOJIS
+───────────────────────────────────────────────────────────────────────────────
+  • Upload de emojis customizados (png/gif até 256KB)
+  • Tabela `server_emojis` (id, server_id, name, url, animated bool)
+  • Categorias de emoji por pack
+  • Limite por server baseado no plano (free: 10, pro: 50)
+
+
+================================================================================
+FASE 3 — ROLE SYSTEM & PERMISSION MATRIX
+================================================================================
+Prioridade: ALTA
+Dependências: Fase 0
+Esforço estimado: 5-7 dias
+
+3.1  ROLE HIERARCHY (DRAG & DROP)
+───────────────────────────────────────────────────────────────────────────────
+  • Ordenar cargos por arrasto (ordem = hierarquia)
+  • Cargo mais alto no topo sobrescreve permissões de baixo
+  • Coluna `position` em server_roles para ordenação
+  • Nova mutation: useReorderRoles
+
+3.2  PERMISSION MATRIX (VISUAL GRID)
+───────────────────────────────────────────────────────────────────────────────
+  • Substituir switches individuais por grid visual:
+      ┌──────────────┬──────────┬──────────┬──────────┐
+      │ Permissão    │ @everyone│ @Mod     │ @Admin   │
+      ├──────────────┼──────────┼──────────┼──────────┤
+      │ Ler msgs     │    ✓     │    ✓     │    ✓     │
+      │ Enviar msgs  │    ✓     │    ✓     │    ✓     │
+      │ Gerenciar    │    ✗     │    ✓     │    ✓     │
+      └──────────────┴──────────┴──────────┴──────────┘
+  • Cores: verde (✓), vermelho (✗), amarelo (herdado)
+  • Permissões por canal (override)
+
+3.3  PERMISSIONS AVANÇADAS (BITFIELD)
+───────────────────────────────────────────────────────────────────────────────
+  • Migrar permissões de JSON string para BIGINT bitfield:
+      1 << 0  = CREATE_INVITE
+      1 << 1  = KICK_MEMBERS
+      1 << 2  = BAN_MEMBERS
+      1 << 3  = MANAGE_CHANNELS
+      1 << 4  = MANAGE_ROLES
+      1 << 5  = MANAGE_SERVER
+      1 << 6  = SEND_MESSAGES
+      1 << 7  = EMBED_LINKS
+      1 << 8  = ATTACH_FILES
+      1 << 9  = MENTION_EVERYONE
+      1 << 10 = MUTE_MEMBERS
+      1 << 11 = DEAFEN_MEMBERS
+      1 << 12 = MOVE_MEMBERS
+      1 << 13 = MANAGE_MESSAGES
+      1 << 14 = MANAGE_THREADS
+      1 << 15 = CREATE_POLLS
+  • Helper function: hasPermission(permissions: bigint, flag: bigint): bool
+
+3.4  ROLE MENTIONS
+───────────────────────────────────────────────────────────────────────────────
+  • @RoleName em mensagens (se role tiver permissão de menção)
+  • Highlight especial para @everyone e @here
+  • Notificação push para membros quando mencionados
+
+3.5  ROLE COLORS — REAL-TIME PREVIEW
+───────────────────────────────────────────────────────────────────────────────
+  • Preview ao vivo da cor no member list
+  • Gradient de cores para PRO users (campo name_colors)
+  • Efeitos de nome: brilho, arco-íris (já existe name_effect)
+  • Color picker no editor de cargo com paleta sugerida
+
+3.6  CARGO TEMPLATES
+───────────────────────────────────────────────────────────────────────────────
+  • "Moderador": kick, ban, mute, manage_messages
+  • "Gerente": manage_channels, manage_roles, manage_server
+  • "Membro": send_messages, embed_links, attach_files
+  • "Visitante": read_messages apenas
+  • Botão "Aplicar template" no editor de cargo
+
+3.7  XP-BASED AUTO-ROLES
+───────────────────────────────────────────────────────────────────────────────
+  • Config: "Quando usuário atingir nível X de XP, recebe cargo Y"
+  • Trigger no servidor: check_xp_reward() em server_xp UPDATE
+  • Frontend: tabela de regras no ServerRoles tab
+  • Notificação ao ganhar cargo automático
+  • Histórico de cargos removidos/atribuídos
+
+
+================================================================================
+FASE 4 — XP SYSTEM & SERVER REWARDS
+================================================================================
+Prioridade: ALTA
+Dependências: Fase 0, Fase 3
+Esforço estimado: 6-8 dias
+
+4.1  TANSTACK QUERY PARA XP
+───────────────────────────────────────────────────────────────────────────────
+  • useServerXPQueries(serverId, userId):
+      - XP atual + nível calculado
+      - Thresholds de recompensa do servidor
+      - Achievements do usuário no servidor
+      - Leaderboard (top 20)
+      - Próximo marco de XP com progresso
+  • Cache com staleTime: 15s (leaderboard: 60s)
+
+4.2  XP UI NO CHAT
+───────────────────────────────────────────────────────────────────────────────
+  • Barra de XP animada no header do canal
+  • Toast de "Nível up!" ao passar de nível
+  • Partículas/confete ao subir de nível (CSS animation)
+  • "XP ganho: +1" toast sutil ao enviar mensagem
+
+4.3  XP LEADERBOARD
+───────────────────────────────────────────────────────────────────────────────
+  • Comando /leaderboard no chat
+  • Página /app/servers/$serverId/leaderboard
+  • Top 10 com avatar, nome, nível, barra de XP
+  • Posição do usuário atual destacada
+  • Filtro por período (hoje, semana, mês, total)
+
+4.4  REWARD SYSTEM (OWNER CONFIG)
+───────────────────────────────────────────────────────────────────────────────
+  • UI em ServerRoles tab → aba "Recompensas"
+  • Tabela de regras: nível → recompensa
+  • Tipos de recompensa:
+      - CARGO: auto-assign role
+      - LEVEL_BOOST: ganha +X level no server_members.level
+      - ITEM: badge especial no perfil
+      - CUSTOM: mensagem personalizada
+  • Modal de criação: level threshold + tipo + valor
+  • Preview de quantos membros seriam afetados
+  • Histórico de recompensas concedidas
+
+4.5  XP MULTIPLIERS & EVENTS
+───────────────────────────────────────────────────────────────────────────────
+  • Multiplicador global: 2x XP (configurável por owner)
+  • Eventos programados: "Fim de semana de XP dobrado"
+  • Bônus por fresh join: +50 XP nos primeiros 3 dias
+  • Bônus por convite: +10 XP por novo membro convidado
+
+4.6  VOICE XP
+───────────────────────────────────────────────────────────────────────────────
+  • Função RPC: grant_voice_xp()
+  • Frontend: emitir heartbeat enquanto em voice channel (a cada 5 min)
+  • +1 XP por minuto em canal de voz
+  • Limite: max 60 XP/hora em voice
+  • Indicador no voice channel: "Ganhando XP por estar aqui"
+
+4.7  XP DECAY & CAPS
+───────────────────────────────────────────────────────────────────────────────
+  • Daily cap: 200 XP/dia por servidor (configurável)
+  • Decay: -5% do XP total se ficar 30 dias sem atividade
+  • Reset: owner pode resetar XP de um membro
+  • Leaderboard season: reset mensal opcional
+
+4.8  XP HISTORY & STATS
+───────────────────────────────────────────────────────────────────────────────
+  • Tabela `xp_transactions`: id, server_xp_id, delta, reason, created_at
+  • Gráfico de XP ao longo do tempo (recharts)
+  • Breakdown: mensagens vs voz vs bônus
+  • "Maior ganhador do dia" destaque
+
+4.9  ACHIEVEMENTS SYSTEM
+───────────────────────────────────────────────────────────────────────────────
+  • Achievements automáticos:
+      - "Primeira mensagem" — enviar 1 msg
+      - "Falador" — 100 mensagens
+      - "Veterano" — 30 dias no servidor
+      - "Social" — 10 amigos no servidor
+      - "Madrugador" — mensagem entre 0h-5h
+      - "Celebridade" — receber 50 reações
+  • Badge visual no perfil do usuário
+  • Notificação ao desbloquear achievement
+  • Owner pode criar achievements customizados
+
+
+================================================================================
+FASE 5 — REALTIME ENGINE (PRESENÇA + EVENTOS)
+================================================================================
+Prioridade: MÉDIA
+Dependências: Fase 0
+Esforço estimado: 4-6 dias
+
+5.1  UNIFIED REALTIME HOOK
+───────────────────────────────────────────────────────────────────────────────
+  • Novo hook: useRealtimeChannel(channelId, config)
+  • Unifica Supabase Realtime + Socket.io em uma abstração
+  • Config:
+      - postgresChanges: tabelas para escutar
+      - broadcast: { event, payload }
+      - presence: boolean
+      - socket: { room, events }
+  • Auto-cleanup, reconnection com exponential backoff
+  • Status tracking: status do RealtimeChannel (SUBSCRIBED | CLOSED | etc)
+
+5.2  PRESENCE REFINEMENT
+───────────────────────────────────────────────────────────────────────────────
+  • Substituir Map<string,string> por estrutura tipada:
+      { userId, status, lastOnline, customStatus, device }
+  • Inactive threshold: marcar como "ausente" após 5 min sem atividade
+  • Presence no DM: mostrar status do outro usuário em tempo real
+  • Presence no server header: "X online, Y offline"
+  • Afk detection via lastActivity timestamp + background polling
+
+5.3  CONNECTION STATUS INDICATOR
+───────────────────────────────────────────────────────────────────────────────
+  • Indicador global no canto inferior esquerdo
+  • Estados: Conectado, Reconectando, Desconectado
+  • Tooltip com latência aproximada
+  • Toast ao perder conexão
+  • Botão "Reconectar" manual
+
+5.4  READ RECEIPTS (LIDOS)
+───────────────────────────────────────────────────────────────────────────────
+  • RPC: mark_channel_read(channel_id)
+  • Trigger on scroll: marcar como lido ao ver última mensagem
+  • Badge de não lido no channel list
+  • Badge de não lido no server icon (app shell)
+  • Menção não lida: destaque vermelho
+
+5.5  TYPING INDICATORS — GRUPOS
+───────────────────────────────────────────────────────────────────────────────
+  • "Maria, João e mais 3 estão digitando..."
+  • Agrupamento: até 3 nomes, depois "+X"
+  • Timeout por usuário (parou de digitar há 4s)
+  • Animação de bolinhas pulsando
+  • Typing no canal de voz durante transmissão
+
+5.6  REALTIME SYNC PARA MUTAÇÕES
+───────────────────────────────────────────────────────────────────────────────
+  • Broadcast via socket.io ao invés de esperar postgres_changes
+  • Mutations enviam evento `message:new` direto via socket
+  • Receptor insere no cache do React Query sem refetch
+  • Fallback: postgres_changes para consistência
+
+
+================================================================================
+FASE 6 — DMs SYSTEM (MENSAGENS DIRETAS)
+================================================================================
+Prioridade: MÉDIA
+Dependências: Fase 0, Fase 1 (reutilizar useChat)
+Esforço estimado: 5-7 dias
+
+6.1  REUSAR useChat HOOK
+───────────────────────────────────────────────────────────────────────────────
+  • Refatorar $conversationId.tsx para usar o mesmo useChat hook do servidor
+  • Parâmetro: { mode: "dm", conversationId }
+  • Eliminar duplicação de lógica (send, load, reactions, typing)
+
+6.2  GROUP DMs
+───────────────────────────────────────────────────────────────────────────────
+  • Tabela `dm_conversations`: tipo ENUM 'dm' | 'group'
+  • Adicionar coluna `title` e `icon_url` para group DMs
+  • Criar grupo: selecionar 2+ amigos
+  • Adicionar/remover participantes
+  • Sair do grupo DM
+  • Nome e ícone do grupo editável
+
+6.3  DM FOLDERS
+───────────────────────────────────────────────────────────────────────────────
+  • Pastas para organizar conversas ("Trabalho", "Amigos", "Jogos")
+  • Tabela `dm_folders`: id, user_id, name, position
+  • Tabela `dm_folder_members`: folder_id, conversation_id
+  • UI: accordion folders no DM sidebar
+  • Criar/renomear/excluir pastas
+
+6.4  DM SEARCH
+───────────────────────────────────────────────────────────────────────────────
+  • Search bar no header do DM
+  • Busca full-text em dm_messages
+  • Filtro por data, remetente
+  • Resultados com preview do contexto
+
+6.5  DM REACTIONS
+───────────────────────────────────────────────────────────────────────────────
+  • Adicionar tabela `dm_reactions` (id, message_id, user_id, emoji)
+  • RLS: ALL participantes da conversa
+  • Reutilizar ReactionBar do chat de servidor
+  • Emoji picker completo
+
+6.6  DM VOICE / VIDEO CALLS
+───────────────────────────────────────────────────────────────────────────────
+  • Botão de chamada no header do DM
+  • LiveKit integration (já existe no package.json)
+  • Modal de chamada com avatar + status
+  • Incoming call notification
+  • Toggle áudio/video
+  • Picture-in-picture mode
+
+6.7  DM PINS & BOOKMARKS
+───────────────────────────────────────────────────────────────────────────────
+  • Pinned messages no DM (tabela dm_pins)
+  • Bookmark mensagens em DMs
+  • Lista de pins no sidebar do DM
+
+6.8  DM READ RECEIPTS
+───────────────────────────────────────────────────────────────────────────────
+  • Marcar mensagem como lida ao visualizar
+  • Indicador "Visto por:" com avatares
+  • Badge de não lido no DM list
+  • Contagem de não lidos no header
+
+
+================================================================================
+FASE 7 — USER PROFILE (app/u/)
+================================================================================
+Prioridade: MÉDIA
+Dependências: Fase 0, Fase 4 (XP)
+Esforço estimado: 4-6 dias
+
+7.1  INLINE PROFILE EDITING
+───────────────────────────────────────────────────────────────────────────────
+  • Click-to-edit em bio, display_name, social links
+  • Drag & drop avatar/banner upload com crop
+  • Autosave ou save explícito
+  • Preview ao vivo das alterações
+
+7.2  XP SHOWCASE
+───────────────────────────────────────────────────────────────────────────────
+  • Card de XP global com barra animada e level atual
+  • Breakdown: XP por servidor com progresso individual
+  • Gráfico de XP ao longo do tempo (recharts)
+  • Nível atual, XP total, rank global
+  • Efeito de level-up ao passar de nível
+
+7.3  SERVER-SPECIFIC BADGES
+───────────────────────────────────────────────────────────────────────────────
+  • Mostrar badges de achievements do servidor
+  • Cargos especiais exibidos como badges
+  • "Membro há X anos" badge
+  • Custom badges configurados por owners
+
+7.4  ACTIVITY FEED
+───────────────────────────────────────────────────────────────────────────────
+  • Feed de atividades recentes:
+      - Mensagens recentes (últimas 10)
+      - Reações recebidas
+      - Achievements desbloqueados
+      - Cargos adquiridos
+      - Servidores entrados
+  • Timeline visual com data separadora
+
+7.5  MUTUAL FRIENDS & SERVERS
+───────────────────────────────────────────────────────────────────────────────
+  • "Amigos em comum" se ambos são amigos
+  • "Servidores em comum" com link direto
+  • Grid melhorado de servidores mútuos
+
+7.6  PROFILE THEMES (PRO)
+───────────────────────────────────────────────────────────────────────────────
+  • Tema de perfil customizável (apenas PRO users):
+      - Cor de fundo do banner
+      - Cor do card
+      - Fonte da bio
+      - Efeito do avatar (brilho, borda)
+  • Preview de temas na página de configuração
+  • Temas pré-definidos: "Neon", "Pastel", "Matrix", "Discord"
+
+7.7  FRIEND SYSTEM
+───────────────────────────────────────────────────────────────────────────────
+  • Tabela `friends` (user_id, friend_id, status('pending'|'accepted'), created_at)
+  • UI: Botão "Adicionar amigo" no perfil
+  • Friend requests: accept/decline
+  • Friend list page: /app/friends
+  • Online status dos amigos no friend list
+  • Remover amigo
+
+
+================================================================================
+FASE 8 — INVITE SYSTEM
+================================================================================
+Prioridade: MÉDIA
+Dependências: Nenhuma
+Esforço estimado: 3-4 dias
+
+8.1  VANITY URL (LINK PERSONALIZADO)
+───────────────────────────────────────────────────────────────────────────────
+  • Coluna `vanity_code` em servers (UNIQUE)
+  • Link: /join/{vanity_code}
+  • Só owner pode configurar (level 100)
+  • Validação: 4-20 chars, a-z, 0-9, hífen
+  • Verificação de disponibilidade em tempo real
+
+8.2  INVITE ANALYTICS
+───────────────────────────────────────────────────────────────────────────────
+  • Tabela `invite_analytics`: invite_id, clicked_at, joined (bool)
+  • Dashboard no server settings: total clicks, joins, conversion rate
+  • Gráfico de clicks ao longo do tempo
+  • Top invites por conversão
+  • Reset stats
+
+8.3  INVITE ROLES (AUTO-ROLE ON JOIN)
+───────────────────────────────────────────────────────────────────────────────
+  • Coluna `auto_role_id` em invites
+  • Ao aceitar invite, membro recebe cargo automaticamente
+  • UI para selecionar cargo ao criar invite
+  • Múltiplos cargos por invite (tabela invite_roles)
+
+8.4  JOIN SCREEN CUSTOMIZATION
+───────────────────────────────────────────────────────────────────────────────
+  • Página /invite/$code melhorada:
+      - Banner do servidor como background
+      - Nome + ícone do servidor
+      - Contagem de membros
+      - Mensagem de boas-vindas do invite
+      - Badge de cargo que será atribuído
+  • Loading state com skeleton
+  • Error state com sugestões
+
+8.5  INVITE TYPES
+───────────────────────────────────────────────────────────────────────────────
+  • One-time: expira após 1 uso
+  • Temporary: expira após X horas
+  • Unlimited: sem limite de usos
+  • Permanent: sem expiração
+  • UI: radio group no modal de criação
+
+8.6  INVITE BLACKLIST
+───────────────────────────────────────────────────────────────────────────────
+  • Bloquear usuários específicos de usar invites
+  • Tabela `invite_blacklist`: server_id, user_id, created_by
+  • Check no accept_invite RPC
+  • UI para gerenciar blacklist no server settings
+
+
+================================================================================
+FASE 9 — FERRAMENTAS DE MODERAÇÃO
+================================================================================
+Prioridade: MÉDIA
+Dependências: Fase 0
+Esforço estimado: 4-5 dias
+
+9.1  AUDIT LOG COMPLETO
+───────────────────────────────────────────────────────────────────────────────
+  • Tabela `moderation_logs` já existe — criar UI de visualização
+  • Página /app/servers/$serverId/audit
+  • Filtros: ação, moderador, alvo, data
+  • Cards com: ação, moderador, alvo, motivo, timestamp
+  • Paginação infinita
+  • Export CSV
+
+9.2  CASE MANAGEMENT
+───────────────────────────────────────────────────────────────────────────────
+  • Cada ação gera um "caso" numerado (#001, #002...)
+  • Status: aberto, resolvido, apelado
+  • Notas internas (só mods veem)
+  • Reabrir caso
+  • Histórico completo do usuário no servidor (todas as punições)
+
+9.3  AUTOMOD
+───────────────────────────────────────────────────────────────────────────────
+  • Palavras proibidas: lista configurável por server
+  • Ação: warn, delete message, mute, kick
+  • Limite de menções por mensagem (anti-@everyone spam)
+  • Limite de links por mensagem
+  • Limite de caps lock (> 70% caracteres maiúsculos)
+  • Timeout progressivo (1st: warn, 2nd: 5min mute, 3rd: 1h mute)
+  • Regex customizado por server
+
+9.4  MODAL DE WARN
+───────────────────────────────────────────────────────────────────────────────
+  • Aviso formal ao membro (tabela moderation_logs)
+  • Modal: membro + motivo + evidência (link da mensagem)
+  • DM automático ao membro avisado
+  • Contagem de warns: 3 warns = mute automático
+
+9.5  MODAL DE MUTE MELHORADO
+───────────────────────────────────────────────────────────────────────────────
+  • Presets de duração: 5min, 30min, 1h, 6h, 24h, 7d
+  • Mute em canal específico (apenas silenciar um canal)
+  • Mute com reason obrigatório
+  • DM automático ao mutado com reason e duração
+
+
+================================================================================
+FASE 10 — PERFORMANCE, ACESSIBILIDADE, TESTES
+================================================================================
+Prioridade: MÉDIA
+Dependências: Todas as fases anteriores
+Esforço estimado: 5-7 dias (contínuo)
+
+10.1 PERFORMANCE
+───────────────────────────────────────────────────────────────────────────────
+  • Code splitting: lazy load por rota (TanStack Router já faz)
+  • Image lazy loading + placeholder blur
+  • Memoização: React.memo em MessageBubble, ChannelItem, ServerIcon
+  • useMemo/useCallback em listas grandes e callbacks
+  • Debounce em search inputs (300ms)
+  • Throttle em resize/scroll events
+  • Bundle analysis: remover dead code, tree-shake lucide-icons
+  • Service worker / PWA: cache de assets estáticos
+
+10.2 ACESSIBILIDADE (a11y)
+───────────────────────────────────────────────────────────────────────────────
+  • ARIA labels em todos os botões e links
+  • Keyboard navigation: Tab, Enter, Escape em modais
+  • Role="dialog" em todos os modais
+  • Focus trap em modais e sheets
+  • Skip-to-content link
+  • Contraste de cores suficiente (WCAG AA)
+  • Screen reader friendly: aria-live para toasts, status updates
+
+10.3 RESPONSIVIDADE
+───────────────────────────────────────────────────────────────────────────────
+  • Revisar todos os layouts para mobile (< 640px)
+  • Touch gestures: swipe para voltar, pull-to-refresh
+  • Bottom sheet em vez de modal no mobile
+  • Sidebar como drawer no mobile
+  • Botões maiores para touch targets (> 44px)
+  • Safe area insets para notch phones
+
+10.4 TESTES
+───────────────────────────────────────────────────────────────────────────────
+  • Vitest + @testing-library/react
+  • Testes unitários: hooks (useServerQueries, useServerMutations)
+  • Testes de componente: MessageBubble, ChannelItem, ServerIcon
+  • Testes de integração: fluxo de criação de servidor
+  • Mock de Supabase cliente
+  • Testes de mutation (otimistic updates rollback)
+
+10.5 ERROR HANDLING
+───────────────────────────────────────────────────────────────────────────────
+  • Error boundaries por seção (chat, settings, sidebar)
+  • Fallback UI com botão "Tentar novamente"
+  • Sentry/Rollbar para tracking de erros em produção
+  • Toast de erro com código e ação sugerida
+  • Graceful degradation: se realtime falhar, polling periódico
+
+10.6 ESTADO DE LOADING GLOBAL
+───────────────────────────────────────────────────────────────────────────────
+  • Skeleton components em todas as páginas
+  • Loading state nos botões de submit (spinner + disabled)
+  • Suspense boundaries com fallback
+  • Progress bar para uploads
+
+
+================================================================================
+DIAGRAMA DE DEPENDÊNCIAS
+================================================================================
+
+FASE 0 ────────────────────────────────────────────────────────────────────────
+    │
+    ├──→ FASE 1 (Chat) ───────────────┐
+    ├──→ FASE 2 (Server) ─────────────┤
+    ├──→ FASE 3 (Roles) ──────────────┤
+    ├──→ FASE 5 (Realtime) ───────────┤
+    ├──→ FASE 8 (Invites) ────────────┤
+    └──→ FASE 9 (Moderação) ──────────┤
+                                       │
+FASE 3 ───→ FASE 4 (XP + Rewards) ────┤
+                                       │
+FASE 1 + 0 ───→ FASE 6 (DMs) ─────────┤
+                                       │
+FASE 4 ───→ FASE 7 (Profile) ─────────┤
+                                       │
+TODAS ───→ FASE 10 (Perf + Testes) ───┘
+
+
+================================================================================
+PRIORIDADES RECOMENDADAS
+================================================================================
+
+SPRINT 1 (Dias 1-5):  Fase 0 (Migrações + Hooks + Componentes base)
+SPRINT 2 (Dias 6-12): Fase 1 (Chat System)
+SPRINT 3 (Dias 13-17): Fase 2 (Server Creation + Settings)
+SPRINT 4 (Dias 18-23): Fase 3 (Roles) + Fase 4 (XP parcial)
+SPRINT 5 (Dias 24-29): Fase 4 (XP Rewards) + Fase 5 (Realtime)
+SPRINT 6 (Dias 30-35): Fase 6 (DMs)
+SPRINT 7 (Dias 36-40): Fase 7 (Profile) + Fase 8 (Invites)
+SPRINT 8 (Dias 41-45): Fase 9 (Moderação)
+SPRINT 9 (Dias 46-55): Fase 10 (Performance, A11Y, Testes)
+
+================================================================================
+FIM DO PLANO
+================================================================================

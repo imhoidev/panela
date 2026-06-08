@@ -234,3 +234,99 @@ export function useRemoveRole(serverId: string) {
     onError: (err: any) => toast.error(err.message),
   });
 }
+
+export function useAddXPReward(serverId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (reward: {
+      level_threshold: number;
+      reward_type: "role" | "item" | "custom";
+      reward_value: string;
+      message?: string | null;
+    }) => {
+      const { error } = await supabase.from("server_level_rewards").insert({ server_id: serverId, ...reward });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["serverXPRewards", serverId] });
+      toast.success("Regra de recompensa criada");
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao criar regra de recompensa"),
+  });
+}
+
+export function useRemoveXPReward(serverId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (rewardId: string) => {
+      const { error } = await supabase.from("server_level_rewards").delete().eq("id", rewardId).eq("server_id", serverId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["serverXPRewards", serverId] });
+      toast.success("Regra de recompensa removida");
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao remover regra de recompensa"),
+  });
+}
+
+export function useAwardAchievement(serverId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { userId: string; achievementKey: string; message?: string | null }) => {
+      const { error } = await supabase.rpc("award_server_achievement", {
+        _server_id: serverId,
+        _user_id: payload.userId,
+        _achievement_key: payload.achievementKey,
+        _message: payload.message ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["serverAchievements", serverId, variables.userId] });
+      toast.success("Conquista registrada");
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao registrar conquista"),
+  });
+}
+
+export function useToggleBookmark(userId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { message_id: string; note?: string | null }) => {
+      if (!userId) throw new Error("Usuário não autenticado");
+      const { error } = await supabase.from("message_bookmarks").upsert(
+        {
+          user_id: userId,
+          message_id: payload.message_id,
+          note: payload.note ?? null,
+        },
+        { onConflict: ["user_id", "message_id"] }
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["messageBookmarks", userId] });
+      toast.success("Bookmark atualizado");
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao atualizar bookmark"),
+  });
+}
+
+export function useUpdateTopic(channelId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (topic: string) => {
+      const { error } = await supabase.rpc("update_channel_topic", {
+        _channel_id: channelId,
+        _topic: topic,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["channelTopicHistory", channelId] });
+      toast.success("Tópico atualizado");
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao atualizar tópico"),
+  });
+}

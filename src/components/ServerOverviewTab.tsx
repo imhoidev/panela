@@ -1,12 +1,16 @@
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
+import { useServerXP } from "@/hooks/servers";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { LevelBadge } from "@/components/LevelBadge";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { Globe, Lock, AtSign, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { slugify } from "@/lib/slug";
@@ -30,6 +34,15 @@ export function ServerOverviewTab({
   const bannerRef = useRef<HTMLInputElement>(null);
   const updateServer = useUpdateServer(serverId);
   const deleteServer = useDeleteServer(serverId);
+  const { user } = useAuth();
+  const { data: serverXP } = useServerXP(serverId, user?.id);
+  const xpCurrent = serverXP?.xp ?? 0;
+  const xpLevel = serverXP?.level ?? 0;
+  const xpNext = serverXP?.nextXp ?? 10;
+  const xpLevelBase = xpLevel ** 2 * 10;
+  const xpTowardsNext = Math.max(0, xpCurrent - xpLevelBase);
+  const xpNextThreshold = Math.max(1, xpNext - xpLevelBase);
+  const xpProgress = serverXP?.progress ?? (xpNextThreshold > 0 ? xpTowardsNext / xpNextThreshold : 0);
 
   async function uploadIcon(file: File) {
     if (uploadingIcon) return;
@@ -137,6 +150,25 @@ export function ServerOverviewTab({
           </div>
         </div>
       </Card>
+
+      {serverXP && (
+        <Card className="p-4 border border-border/70 bg-card/80">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold">XP no servidor</p>
+              <p className="text-xs text-muted-foreground">Seu progresso atual no servidor {server.name}.</p>
+            </div>
+            <LevelBadge xp={xpCurrent} size="md" />
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] items-center">
+            <ProgressBar value={xpTowardsNext} max={xpNextThreshold} label={`Nível ${xpLevel} → ${xpLevel + 1}`} />
+            <div className="text-right text-xs text-muted-foreground">
+              <div>XP atual: <span className="font-semibold text-foreground">{xpCurrent}</span></div>
+              <div>Faltam: <span className="font-semibold text-foreground">{xpNextThreshold - xpTowardsNext}</span> XP</div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1.2fr]">
         {/* Configurações principais */}
