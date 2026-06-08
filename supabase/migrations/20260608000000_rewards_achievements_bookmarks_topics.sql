@@ -81,7 +81,7 @@ DROP POLICY IF EXISTS "bookmarks_select_self" ON public.message_bookmarks;
 CREATE POLICY "bookmarks_select_self" ON public.message_bookmarks FOR SELECT TO authenticated
   USING (user_id = auth.uid());
 DROP POLICY IF EXISTS "bookmarks_modify_self" ON public.message_bookmarks;
-CREATE POLICY "bookmarks_modify_self" ON public.message_bookmarks FOR INSERT, UPDATE, DELETE TO authenticated
+CREATE POLICY "bookmarks_modify_self" ON public.message_bookmarks FOR ALL TO authenticated
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 

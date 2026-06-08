@@ -77,7 +77,7 @@ function ChannelView() {
   const { user, profile } = useAuth();
   const qc = useQueryClient();
   const [channel, setChannel] = useState<any>(null);
-  const { messages, hasMore, fetchMore, sendMessage, editMessage, deleteMessage } = useChat(channelId);
+  const { messages, hasMore, fetchMore, sendMessage, editMessage, deleteMessage } = useChat(channelId, user?.id);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [typing, setTyping] = useState<Record<string, { name: string; t: number }>>({});
   const [text, setText] = useState("");

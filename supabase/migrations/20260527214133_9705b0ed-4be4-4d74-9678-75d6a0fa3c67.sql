@@ -162,10 +162,14 @@ ALTER TABLE public.server_members ENABLE ROW LEVEL SECURITY;
 CREATE OR REPLACE FUNCTION public.is_server_member(_server UUID, _user UUID)
 RETURNS BOOLEAN LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT EXISTS (SELECT 1 FROM public.server_members WHERE server_id = _server AND user_id = _user)
+     OR EXISTS (SELECT 1 FROM public.servers WHERE id = _server AND owner_id = _user)
 $$;
 CREATE OR REPLACE FUNCTION public.server_member_level(_server UUID, _user UUID)
 RETURNS INTEGER LANGUAGE SQL STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT COALESCE((SELECT level FROM public.server_members WHERE server_id = _server AND user_id = _user), 0)
+  SELECT COALESCE(
+    (SELECT level FROM public.server_members WHERE server_id = _server AND user_id = _user),
+    (SELECT CASE WHEN EXISTS (SELECT 1 FROM public.servers WHERE id = _server AND owner_id = _user) THEN 100 ELSE 0 END)
+  )
 $$;
 
 -- policies de servers

@@ -13,6 +13,15 @@ type ChatMessage = {
   thread_root: string | null;
   edited_at: string | null;
   created_at: string;
+  author?: {
+    username: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    name_color: string | null;
+    name_colors: any;
+    name_effect: string | null;
+    current_plan: string;
+  } | null;
 };
 
 type Page = {
@@ -20,7 +29,7 @@ type Page = {
   nextCursor: string | null;
 };
 
-export function useChat(channelId: string) {
+export function useChat(channelId: string, userId?: string) {
   const qc = useQueryClient();
   const queryKey = ["chatMessages", channelId];
 
@@ -29,7 +38,7 @@ export function useChat(channelId: string) {
     queryFn: async ({ pageParam }) => {
       const builder = supabase
         .from("messages")
-        .select("*")
+        .select("*, author:profiles!author_id(username, display_name, avatar_url, name_color, name_colors, name_effect, current_plan)")
         .eq("channel_id", channelId)
         .is("thread_root", null)
         .order("created_at", { ascending: false })
@@ -40,7 +49,7 @@ export function useChat(channelId: string) {
         : await builder;
 
       if (error) throw error;
-      const items = ((data ?? []) as ChatMessage[]).reverse();
+      const items = ((data ?? []) as any[]).reverse();
       return {
         messages: items,
         nextCursor: items.length === PAGE_SIZE ? items[0].created_at : null,
@@ -59,8 +68,10 @@ export function useChat(channelId: string) {
       attachment_url?: string | null;
       attachment_type?: string | null;
     }) => {
+      const uid = userId || (await supabase.auth.getUser()).data.user?.id;
       const { data, error } = await supabase.from("messages").insert({
         channel_id: channelId,
+        author_id: uid,
         ...payload,
       }).select().maybeSingle();
       if (error) throw error;
