@@ -38,7 +38,7 @@ export function useChat(channelId: string, userId?: string) {
     queryFn: async ({ pageParam }) => {
       const builder = supabase
         .from("messages")
-        .select("*, author:profiles!author_id(username, display_name, avatar_url, name_color, name_colors, name_effect, current_plan)")
+        .select("*")
         .eq("channel_id", channelId)
         .is("thread_root", null)
         .order("created_at", { ascending: false })
@@ -50,6 +50,19 @@ export function useChat(channelId: string, userId?: string) {
 
       if (error) throw error;
       const items = ((data ?? []) as any[]).reverse();
+
+      const authorIds = [...new Set(items.map((m: any) => m.author_id).filter(Boolean))] as string[];
+      if (authorIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, username, display_name, avatar_url, name_color, name_colors, name_effect, current_plan")
+          .in("id", authorIds);
+        const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+        for (const m of items) {
+          m.author = profileMap.get(m.author_id);
+        }
+      }
+
       return {
         messages: items,
         nextCursor: items.length === PAGE_SIZE ? items[0].created_at : null,
