@@ -1,10 +1,12 @@
 import { createFileRoute, useParams, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useRealtimeSocket } from "@/hooks/useRealtime";
+import { useChat } from "@/hooks/useChat";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UsernameBadge } from "@/components/UsernameBadge";
@@ -73,8 +75,9 @@ function ChannelView() {
   const { serverId, channelId } = useParams({ from: "/app/servers/$serverId/$channelId" });
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const qc = useQueryClient();
   const [channel, setChannel] = useState<any>(null);
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const { messages, hasMore, fetchMore, sendMessage, editMessage, deleteMessage } = useChat(channelId);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [typing, setTyping] = useState<Record<string, { name: string; t: number }>>({});
   const [text, setText] = useState("");
@@ -84,7 +87,6 @@ function ChannelView() {
   const [editText, setEditText] = useState("");
   const [uploading, setUploading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [pendingMessages, setPendingMessages] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
@@ -125,31 +127,43 @@ function ChannelView() {
     memberRolesCache.current = userRoles;
   }
 
-  async function load() {
-    const { data: c } = await supabase.from("channels").select("*").eq("id", channelId).maybeSingle();
-    setChannel(c);
-    knownIds.current.clear();
-    if (!c || c.type === "voice") { setMessages([]); setReactions([]); return; }
-    const [msgsRes] = await Promise.all([
-      supabase.from("messages").select("*").eq("channel_id", channelId).is("thread_root", null).order("created_at", { ascending: true }).limit(100),
-      loadRoles(),
-    ]);
-    const list = (msgsRes.data ?? []) as Msg[];
-    list.forEach((m) => knownIds.current.add(m.id));
-    const authors = Array.from(new Set(list.map((m) => m.author_id)));
-    if (authors.length) {
-      const { data: profs } = await supabase.from("profiles").select("id,username,display_name,avatar_url,name_color,name_colors,name_effect,current_plan").in("id", authors);
-      (profs ?? []).forEach((p: any) => profilesCache.current.set(p.id, p));
-    }
-    list.forEach((m) => { m.author = profilesCache.current.get(m.author_id) ?? null; });
-    setMessages(list);
-    setHasMore(list.length >= 100);
-    if (list.length) {
-      const ids = list.map((m) => m.id);
-      const { data: rx } = await supabase.from("message_reactions").select("*").in("message_id", ids);
-      setReactions((rx ?? []) as Reaction[]);
-    } else setReactions([]);
-    requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }));
+  function appendMessageToCache(message: Msg) {
+    qc.setQueryData(["chatMessages", channelId], (old: any) => {
+      if (!old?.pages) return old;
+      const pages = old.pages.slice();
+      if (!pages.length) {
+        pages.push({ messages: [message], nextCursor: null });
+      } else {
+        pages[0] = { ...pages[0], messages: [...pages[0].messages, message] };
+      }
+      return { ...old, pages };
+    });
+  }
+
+  function updateMessageInCache(message: Msg) {
+    qc.setQueryData(["chatMessages", channelId], (old: any) => {
+      if (!old?.pages?.length) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page: any) => ({
+          ...page,
+          messages: page.messages.map((m: Msg) => m.id === message.id ? { ...m, ...message } : m),
+        })),
+      };
+    });
+  }
+
+  function removeMessageFromCache(messageId: string) {
+    qc.setQueryData(["chatMessages", channelId], (old: any) => {
+      if (!old?.pages?.length) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page: any) => ({
+          ...page,
+          messages: page.messages.filter((m: Msg) => m.id !== messageId),
+        })),
+      };
+    });
   }
 
   useEffect(() => { inputRef.current?.focus(); }, [channelId]);
@@ -159,34 +173,38 @@ function ChannelView() {
     const obs = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting || loadingMore || !hasMore) return;
       setLoadingMore(true);
-      const oldest = messages[0];
       prevScrollHeight.current = scrollRef.current?.scrollHeight || 0;
-      supabase.from("messages")
-        .select("*").eq("channel_id", channelId).is("thread_root", null)
-        .lt("created_at", oldest.created_at).order("created_at", { ascending: false }).limit(50)
-        .then(async ({ data }) => {
-          const older = (data ?? []).reverse() as Msg[];
-          if (older.length < 50) setHasMore(false);
-          if (!older.length) { setLoadingMore(false); return; }
-          older.forEach((m) => knownIds.current.add(m.id));
-          const authors = Array.from(new Set(older.map((m) => m.author_id)));
-          if (authors.length) {
-            const { data: profs } = await supabase.from("profiles").select("id,username,display_name,avatar_url,name_color,name_colors,name_effect,current_plan").in("id", authors);
-            (profs ?? []).forEach((p: any) => profilesCache.current.set(p.id, p));
-          }
-          older.forEach((m) => { m.author = profilesCache.current.get(m.author_id) ?? null; });
-          setMessages((prev) => [...older, ...prev]);
-          setLoadingMore(false);
-          requestAnimationFrame(() => {
-            if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight - prevScrollHeight.current;
-          });
-        });
+      fetchMore().finally(() => setLoadingMore(false));
     }, { rootMargin: "200px" });
     if (sentinelRef.current) obs.observe(sentinelRef.current);
     return () => obs.disconnect();
-  }, [hasMore, loadingMore, messages.length, channelId]);
+  }, [hasMore, loadingMore, fetchMore, channelId]);
 
-  useEffect(() => { setMessages([]); setReactions([]); setReplyTo(null); setEditing(null); load(); }, [channelId]);
+  useEffect(() => {
+    let active = true;
+    async function loadChannel() {
+      const { data } = await supabase.from("channels").select("*").eq("id", channelId).maybeSingle();
+      if (!active) return;
+      setChannel(data);
+    }
+    loadChannel();
+    return () => { active = false; };
+  }, [channelId]);
+
+  useEffect(() => { inputRef.current?.focus(); }, [channelId]);
+
+  useEffect(() => { setReactions([]); setReplyTo(null); setEditing(null); loadRoles(); }, [channelId]);
+
+  useEffect(() => {
+    if (!messages.length) { setReactions([]); return; }
+    let active = true;
+    const ids = messages.map((m) => m.id);
+    supabase.from("message_reactions").select("*").in("message_id", ids).then(({ data }) => {
+      if (!active) return;
+      setReactions((data ?? []) as Reaction[]);
+    });
+    return () => { active = false; };
+  }, [channelId, messages.length]);
 
   // Realtime subscription (backup — socket.io is primary)
   useEffect(() => {
@@ -198,7 +216,7 @@ function ChannelView() {
           if (m.thread_root || knownIds.current.has(m.id)) return;
           knownIds.current.add(m.id);
           m.author = await fetchProfile(m.author_id);
-          setMessages((prev) => [...prev, m]);
+          appendMessageToCache(m);
           requestAnimationFrame(() => {
             if (scrollRef.current) {
               const atBottom = scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight < 150;
@@ -210,10 +228,10 @@ function ChannelView() {
         async (payload) => {
           const m = payload.new as Msg;
           m.author = await fetchProfile(m.author_id);
-          setMessages((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x));
+          updateMessageInCache(m);
         })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages", filter: `channel_id=eq.${channelId}` },
-        (payload) => { const id = (payload.old as any).id; knownIds.current.delete(id); setMessages((prev) => prev.filter((m) => m.id !== id)); })
+        (payload) => { const id = (payload.old as any).id; knownIds.current.delete(id); removeMessageFromCache(id); })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" },
         (payload) => {
           if (payload.eventType === "INSERT") setReactions((p) => [...p, payload.new as Reaction]);
@@ -233,7 +251,7 @@ function ChannelView() {
       if (knownIds.current.has(m.id) || m.thread_root) return;
       knownIds.current.add(m.id);
       m.author = await fetchProfile(m.author_id);
-      setMessages((prev) => [...prev, m]);
+      appendMessageToCache(m);
       requestAnimationFrame(() => {
         if (scrollRef.current) {
           const atBottom = scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight < 150;
@@ -243,11 +261,11 @@ function ChannelView() {
     };
     const onMessageDeleted = ({ messageId }: { messageId: string }) => {
       knownIds.current.delete(messageId);
-      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      removeMessageFromCache(messageId);
     };
     const onMessageUpdated = async (m: Msg) => {
       m.author = await fetchProfile(m.author_id);
-      setMessages((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x));
+      updateMessageInCache(m);
     };
     const onTypingStart = ({ userId: uid, username }: { userId: string; username: string }) => {
       if (uid === user?.id) return;
@@ -326,23 +344,18 @@ function ChannelView() {
     if (!user || !text.trim() || sending) return;
     const content = text.trim(); const reply = replyTo?.id ?? null; setText(""); setReplyTo(null);
     setSending(true);
-    const { data, error } = await supabase.from("messages").insert({
-      channel_id: channelId, author_id: user.id, content, reply_to: reply,
-    }).select().maybeSingle();
-    if (error) {
+    try {
+      const message = await sendMessage.mutateAsync({ content, reply_to: reply });
+      if (message) {
+        knownIds.current.add(message.id);
+        if (socket) socket.emit("message:new", { channelId, message });
+        requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }));
+      }
+    } catch (_err) {
+      // erro tratado pelo hook
+    } finally {
       setSending(false);
-      if (error.code === "42501") return toast.error("Você está silenciado neste servidor.");
-      return toast.error(error.message);
     }
-    if (data) {
-      const m = data as Msg;
-      knownIds.current.add(m.id);
-      m.author = profilesCache.current.get(m.author_id) ?? null;
-      setMessages((prev) => [...prev, m]);
-      if (socket) socket.emit("message:new", { channelId, message: m });
-      requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }));
-    }
-    setSending(false);
   }
 
   async function react(msg: Msg, emoji: string) {
@@ -355,19 +368,24 @@ function ChannelView() {
   async function removeMsg(m: Msg) {
     if (!confirm("Apagar essa mensagem?")) return;
     knownIds.current.delete(m.id);
-    setMessages((prev) => prev.filter((x) => x.id !== m.id));
     if (socket) socket.emit("message:deleted", { channelId, messageId: m.id });
-    await supabase.from("messages").delete().eq("id", m.id);
+    try {
+      await deleteMessage.mutateAsync(m.id);
+    } catch (_err) {
+      // erro tratado pelo hook
+    }
   }
 
   async function saveEdit() {
     if (!editing) return;
     const c = editText.trim(); if (!c) return;
-    const { data, error } = await supabase.from("messages").update({ content: c, edited_at: new Date().toISOString() })
-      .eq("id", editing.id).select().maybeSingle();
-    if (error) return toast.error(error.message);
-    if (data && socket) socket.emit("message:updated", { channelId, message: data as Msg });
-    setEditing(null);
+    try {
+      await editMessage.mutateAsync({ id: editing.id, content: c });
+      if (socket) socket.emit("message:updated", { channelId, message: { id: editing.id, content: c, edited_at: new Date().toISOString(), author_id: editing.author_id, channel_id: editing.channel_id, reply_to: editing.reply_to, thread_root: editing.thread_root, created_at: editing.created_at, attachment_url: editing.attachment_url, attachment_type: editing.attachment_type } });
+      setEditing(null);
+    } catch (_err) {
+      // erro tratado pelo hook
+    }
   }
 
   async function uploadFile(file: File) {

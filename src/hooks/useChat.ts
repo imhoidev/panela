@@ -59,14 +59,18 @@ export function useChat(channelId: string) {
       attachment_url?: string | null;
       attachment_type?: string | null;
     }) => {
-      const { error } = await supabase.from("messages").insert({
+      const { data, error } = await supabase.from("messages").insert({
         channel_id: channelId,
         ...payload,
-      });
+      }).select().maybeSingle();
       if (error) throw error;
+      return data as ChatMessage | null;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey }),
-    onError: (err: any) => toast.error(err.message || "Erro ao enviar mensagem"),
+    onError: (err: any) => {
+      if (err?.code === "42501") toast.error("Você está silenciado neste servidor.");
+      else toast.error(err.message || "Erro ao enviar mensagem");
+    },
   });
 
   const editMessage = useMutation({
@@ -88,7 +92,7 @@ export function useChat(channelId: string) {
   });
 
   return {
-    messages: messagesQuery.data?.pages.flatMap((page) => page.messages) ?? [],
+    messages: messagesQuery.data?.pages.slice().reverse().flatMap((page) => page.messages) ?? [],
     isLoading: messagesQuery.isLoading,
     isFetchingMore: messagesQuery.isFetchingNextPage,
     hasMore: Boolean(messagesQuery.hasNextPage),
