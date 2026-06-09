@@ -85,7 +85,7 @@ function ChannelView() {
               {onlineCount}
             </Button>
           </SheetTrigger>
-          <SheetContent side="right" className="p-0 w-[280px]">
+          <SheetContent side="right" className="p-0 w-[280px] flex flex-col">
             <MemberList serverId={serverId} presence={ctx?.presence ?? new Map()} />
           </SheetContent>
         </Sheet>
@@ -99,14 +99,14 @@ function ChannelView() {
   );
 
   const chatArea = isVoice ? (
-    <div className="flex flex-col h-full bg-gradient-to-b from-transparent to-card/10 relative">
+    <div className="flex flex-col flex-1 min-h-0 bg-gradient-to-b from-transparent to-card/10 relative">
       {header}
       <div className="flex-1 min-h-0">
         <VoiceRoom room={`panela-${channelId}`} channelId={channelId} />
       </div>
     </div>
   ) : (
-    <div className="flex flex-col h-full relative">
+    <div className="flex flex-col flex-1 min-h-0 relative">
       <ChatContainer
         channelId={channelId}
         serverId={serverId}
@@ -122,11 +122,11 @@ function ChannelView() {
   return (
     <div className="flex h-full">
       {/* Main chat area */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex flex-col">
         {chatArea}
       </div>
       {/* Desktop member list column */}
-      <aside className="hidden lg:flex w-60 xl:w-64 shrink-0 border-l border-border/50 bg-card/20">
+      <aside className="hidden lg:flex w-60 xl:w-64 shrink-0 flex-col border-l border-border/50 bg-card/20">
         <MemberList serverId={serverId} presence={ctx?.presence ?? new Map()} />
       </aside>
     </div>
