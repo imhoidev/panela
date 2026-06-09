@@ -69,7 +69,7 @@ export function usePresenceChannel(serverId: string, userId: string | undefined,
   useEffect(() => {
     if (!serverId || !userId) return;
 
-    if (socket) {
+    if (socket?.connected) {
       const joinServer = () => {
         socket.emit("presence:join", { serverId, status: "online" });
       };
