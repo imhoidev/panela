@@ -66,7 +66,7 @@ function DMLayout() {
     });
 
     if (allIds.size) {
-      const { data: profs } = await supabase.from("profiles").select("id,username,display_name,avatar_url").in("id", [...allIds]);
+      const { data: profs } = await supabase.from("profiles").select("id,username,display_name,avatar_url,status,status_text").in("id", [...allIds]);
       const m = new Map(profs?.map((p: any) => [p.id, p]) ?? []);
       setProfiles(m);
       setConversations(mapped.map((c: any) => {
@@ -177,15 +177,15 @@ function DMLayout() {
   }
 
   const sidebar = (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-sidebar-border">
-        <h2 className="font-semibold text-sm flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Mensagens Diretas</h2>
+    <div className="flex flex-col h-full bg-sidebar/90 backdrop-blur-md">
+      <div className="p-4 border-b border-sidebar-border/60">
+        <h2 className="font-semibold text-sm flex items-center gap-2"><MessageSquare className="h-4 w-4 text-primary/70" /> Mensagens Diretas</h2>
       </div>
       <div className="p-2">
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar conversas..." className="pl-8 h-9 text-xs" />
+            placeholder="Buscar conversas..." className="pl-8 h-9 text-xs bg-sidebar-accent/30 border-sidebar-border/50 focus:bg-sidebar-accent/50 transition-colors backdrop-blur-sm" />
         </div>
       </div>
       <div className="flex-1 overflow-auto p-2 space-y-0.5">
@@ -217,6 +217,14 @@ function DMLayout() {
                     )}
                   </div>
                 </div>
+                {!c.isGroup && c.other && (
+                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar ${
+                    c.other?.status === "online" ? "bg-emerald-500"
+                    : c.other?.status === "idle" ? "bg-yellow-500"
+                    : c.other?.status === "dnd" ? "bg-red-500"
+                    : "bg-muted-foreground/30"
+                  }`} />
+                )}
                 {unread && <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-primary border-2 border-sidebar" />}
               </div>
               <div className="min-w-0 flex-1">

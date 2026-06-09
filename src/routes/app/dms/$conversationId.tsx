@@ -76,7 +76,11 @@ function DMChat() {
   const scrollTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   const STATUS_DOT: Record<string, string> = {
-    online: "bg-emerald-500", idle: "bg-yellow-500", dnd: "bg-red-500", offline: "bg-muted-foreground/30",
+    online: "bg-emerald-500", idle: "bg-yellow-500", dnd: "bg-red-500", invisible: "bg-muted-foreground/30", offline: "bg-muted-foreground/30",
+  };
+
+  const STATUS_LABEL: Record<string, string> = {
+    online: "Online", idle: "Ausente", dnd: "Ocupado", invisible: "Invisível", offline: "Offline",
   };
 
   async function load() {
@@ -376,10 +380,10 @@ function DMChat() {
 
   return (
     <div className="flex flex-col h-full relative">
-      <header className="pb-3 border-b border-border bg-card/70 backdrop-blur-sm sticky top-0 z-10">
+      <header className="pb-3 border-b border-border/50 bg-card/40 backdrop-blur-md sticky top-0 z-10 shadow-sm">
         <div className="flex items-center gap-3 px-4 pt-3">
           <div className="relative shrink-0">
-            <div className="flex items-center gap-[-0.4rem]">
+            <div className="flex items-center">
               {conversationParticipants.filter((p) => p.user_id !== user?.id).slice(0, 3).map((participant: any, idx: number) => {
                 const profile = profilesCache.current.get(participant.user_id) ?? null;
                 return (
@@ -395,7 +399,10 @@ function DMChat() {
           <div className="min-w-0">
             <p className="text-sm font-semibold truncate">{conversationParticipants.length > 2 ? groupTitle : other?.display_name || other?.username || "Carregando..."}</p>
             <div className="text-[10px] text-muted-foreground flex flex-wrap gap-2">
-              <span className={`inline-flex items-center gap-1 ${statusDot}`}>{conversationParticipants.length > 2 ? `${conversationParticipants.length} participantes` : otherStatus === "online" ? "Online" : otherStatus === "idle" ? "Ausente" : otherStatus === "dnd" ? "Ocupado" : "Offline"}</span>
+              <span className={`inline-flex items-center gap-1.5`}>
+                <span className={`h-2 w-2 rounded-full ${statusDot}`} />
+                {conversationParticipants.length > 2 ? `${conversationParticipants.length} participantes` : STATUS_LABEL[otherStatus] || "Offline"}
+              </span>
               <span className="inline-flex items-center gap-1 text-muted-foreground/70">{conversationParticipants.length > 2 ? "Grupo" : "Mensagem direta"}</span>
             </div>
           </div>

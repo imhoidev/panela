@@ -16,10 +16,11 @@ type MemberWithProfile = {
 };
 
 const STATUS_META: Record<string, { label: string; dot: string; labelColor: string }> = {
-  online:  { label: "Online",  dot: "bg-emerald-500",  labelColor: "text-emerald-500/80" },
-  idle:    { label: "Ausente", dot: "bg-yellow-500",   labelColor: "text-yellow-500/80" },
-  dnd:     { label: "Ocupado", dot: "bg-red-500",      labelColor: "text-red-500/80" },
-  offline: { label: "Offline", dot: "bg-muted-foreground/30", labelColor: "text-muted-foreground/60" },
+  online:    { label: "Online",    dot: "bg-emerald-500",            labelColor: "text-emerald-500/80" },
+  idle:      { label: "Ausente",   dot: "bg-yellow-500",             labelColor: "text-yellow-500/80" },
+  dnd:       { label: "Ocupado",   dot: "bg-red-500",                labelColor: "text-red-500/80" },
+  invisible: { label: "Invisível", dot: "bg-muted-foreground/30",    labelColor: "text-muted-foreground/60" },
+  offline:   { label: "Offline",   dot: "bg-muted-foreground/30",    labelColor: "text-muted-foreground/60" },
 };
 
 function statusPriority(s: string) {
@@ -28,6 +29,7 @@ function statusPriority(s: string) {
   if (s === "dnd") return 2;
   return 3;
 }
+
 
 export function MemberList({
   serverId, presence,
@@ -74,7 +76,8 @@ export function MemberList({
     ...STATUS_META[key],
     members: filtered.filter((m) => {
       const s = presence.get(m.user_id) || "offline";
-      return key === "offline" ? (s === "offline" || !presence.has(m.user_id)) : s === key;
+      if (key === "offline") return s === "offline" || s === "invisible" || !presence.has(m.user_id);
+      return s === key;
     }),
   }));
 

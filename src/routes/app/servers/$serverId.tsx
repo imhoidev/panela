@@ -11,7 +11,6 @@ import { ResponsiveDialog } from "@/components/ui/responsive-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MemberList } from "@/components/MemberList";
 import { ServerRoles } from "@/components/ServerRoles";
 import { ServerRewardsTab } from "@/components/ServerRewardsTab";
 import { ServerStickers } from "@/components/ServerStickers";
@@ -289,11 +288,7 @@ function ServerLayout() {
             <div className="flex-1 min-w-0 min-h-0">
               <Outlet />
             </div>
-            {memberLevel > 0 && (
-              <div className="hidden md:flex shrink-0">
-                <MemberList serverId={serverId} presence={presence} />
-              </div>
-            )}
+
           </div>
         </ServerCtx_.Provider>
       </div>
