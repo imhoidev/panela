@@ -81,8 +81,8 @@ export function MemberList({
   const onlineCount = filtered.filter((m) => (presence.get(m.user_id) || "offline") !== "offline").length;
 
   return (
-    <div className="w-56 md:w-60 border-l border-border bg-card/30 flex-col flex h-full">
-      <div className="h-[3.25rem] border-b border-border flex items-center px-4 gap-2.5 shrink-0">
+    <div className="flex-col flex h-full bg-card/30 w-full">
+      <div className="h-[3.25rem] border-b border-border/50 flex items-center px-4 gap-2.5 shrink-0 bg-card/30 backdrop-blur-sm">
         <div className="h-7 w-7 rounded-lg bg-primary/10 grid place-items-center">
           <Users className="h-3.5 w-3.5 text-primary/70" />
         </div>
@@ -101,7 +101,7 @@ export function MemberList({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar membro..."
-            className="pl-7 h-8 text-xs bg-accent/20 border-border/60 focus:bg-accent/40 transition-colors"
+            className="pl-7 h-8 text-xs bg-accent/20 border-border/50 focus:bg-accent/40 transition-colors backdrop-blur-sm"
           />
         </div>
       </div>

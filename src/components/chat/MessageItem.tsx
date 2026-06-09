@@ -62,18 +62,18 @@ export const MessageItem = memo(function MessageItem({
   const isEditing = editingId === m.id;
 
   return (
-    <div className={`group relative flex gap-2.5 px-2 py-0.5 rounded-lg hover:bg-accent/15 transition-colors ${sameAuthor ? "pl-[3.25rem]" : "pt-1.5"} ${isTemp ? "opacity-70" : ""}`}>
+    <div className={`group relative flex gap-2.5 px-2 py-0.5 rounded-lg hover:bg-accent/10 transition-colors ${sameAuthor ? "pl-[3.25rem]" : "pt-1.5"} ${isTemp ? "opacity-60" : ""}`}>
       {!sameAuthor ? (
         <Link to="/app/u/$slug" params={{ slug: m.author_id }}
-          className="h-9 w-9 mt-0.5 shrink-0 rounded-full overflow-hidden ring-2 ring-transparent hover:ring-primary/40 transition-all">
+          className="h-9 w-9 mt-0.5 shrink-0 rounded-full overflow-hidden ring-2 ring-transparent hover:ring-primary/40 transition-all shadow-sm">
           <Avatar className="h-full w-full">
             <AvatarImage src={m.author?.avatar_url ?? undefined} />
-            <AvatarFallback className="text-xs">{(m.author?.username ?? "?")[0]?.toUpperCase()}</AvatarFallback>
+            <AvatarFallback className="text-xs bg-muted/50">{(m.author?.username ?? "?")[0]?.toUpperCase()}</AvatarFallback>
           </Avatar>
         </Link>
       ) : (
         <div className="w-9 shrink-0 text-right pt-0.5">
-          <span className="text-[10px] text-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity select-none">
+          <span className="text-[10px] text-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity select-none cursor-default">
             {relativeTime(m.created_at)}
           </span>
         </div>
@@ -81,7 +81,7 @@ export const MessageItem = memo(function MessageItem({
 
       <div className="min-w-0 flex-1 -mt-0.5">
         {replied && (
-          <div className="text-xs text-muted-foreground/60 flex items-center gap-1 mb-0.5 truncate border-l-2 border-primary/30 pl-2">
+          <div className="text-xs text-muted-foreground/60 flex items-center gap-1 mb-0.5 truncate border-l-2 border-primary/30 pl-2 hover:border-primary/50 transition-colors">
             <CornerUpLeft className="h-3 w-3 shrink-0" />
             <span className="font-medium text-foreground/60">@{replied.author?.username ?? "alguém"}</span>
             <span className="truncate opacity-70">{replied.content}</span>
@@ -95,13 +95,13 @@ export const MessageItem = memo(function MessageItem({
               topRole.gif_tag_url ? (
                 <img src={topRole.gif_tag_url} alt="" className="h-4 w-4 rounded-sm object-cover shrink-0" title={topRole.name} />
               ) : (
-                <span className="text-[10px] font-medium leading-none px-1 py-0.5 rounded shrink-0"
-                  style={{ color: topRole.color || undefined, backgroundColor: topRole.color ? `${topRole.color}22` : undefined }}>
+                <span className="text-[10px] font-medium leading-none px-1.5 py-0.5 rounded shrink-0"
+                  style={{ color: topRole.color || undefined, backgroundColor: topRole.color ? `${topRole.color}18` : "bg-accent/40" }}>
                   {topRole.name}
                 </span>
               )
             )}
-            <span className="text-[10px] text-muted-foreground/50" title={new Date(m.created_at).toLocaleString("pt-BR")}>
+            <span className="text-[10px] text-muted-foreground/40" title={new Date(m.created_at).toLocaleString("pt-BR")}>
               {relativeTime(m.created_at)}
             </span>
           </div>
@@ -111,25 +111,25 @@ export const MessageItem = memo(function MessageItem({
           <div className="flex gap-2 items-center mt-1">
             <Input autoFocus value={editText} onChange={(e) => setEditText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Escape") cancelEdit(); if (e.key === "Enter") onSaveEdit(); }}
-              className="h-9 text-sm" />
-            <Button size="icon" onClick={onSaveEdit} className="h-8 w-8"><Check className="h-4 w-4" /></Button>
-            <Button size="icon" variant="ghost" onClick={cancelEdit} className="h-8 w-8"><X className="h-4 w-4" /></Button>
+              className="h-9 text-sm bg-accent/20 border-border/60" />
+            <Button size="icon" onClick={onSaveEdit} className="h-9 w-9 shrink-0"><Check className="h-4 w-4" /></Button>
+            <Button size="icon" variant="ghost" onClick={cancelEdit} className="h-9 w-9 shrink-0"><X className="h-4 w-4" /></Button>
           </div>
         ) : (
           <div className="mt-0.5">
             {m.content && (
-              <div className="text-sm prose prose-sm prose-invert max-w-none prose-p:my-0.5 prose-headings:my-1 prose-pre:bg-muted prose-code:text-primary/80 prose-a:text-primary prose-img:rounded-lg">
+              <div className="text-sm prose prose-sm prose-invert max-w-none prose-p:my-0.5 prose-headings:my-1 prose-pre:bg-muted/80 prose-code:text-primary/80 prose-a:text-primary prose-img:rounded-lg">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
               </div>
             )}
-            {m.edited_at && <span className="text-[10px] text-muted-foreground/40 ml-1">(editado)</span>}
+            {m.edited_at && <span className="text-[10px] text-muted-foreground/30 ml-1">(editado)</span>}
             {m.attachment_url && (
               <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"
-                className="mt-1.5 inline-flex items-center gap-2.5 rounded-lg border border-border/60 bg-accent/20 px-3 py-2 text-sm hover:bg-accent/40 transition-colors">
+                className="mt-1.5 inline-flex items-center gap-2.5 rounded-lg border border-border/50 bg-accent/15 px-3 py-2 text-sm hover:bg-accent/30 transition-colors">
                 {m.attachment_type?.startsWith("image/") ? (
-                  <img src={m.attachment_url} alt="attachment" className="max-h-48 rounded object-contain" />
+                  <img src={m.attachment_url} alt="attachment" className="max-h-48 rounded-lg object-contain shadow-sm" />
                 ) : m.attachment_type?.startsWith("video/") ? (
-                  <video src={m.attachment_url} controls className="max-h-48 rounded" />
+                  <video src={m.attachment_url} controls className="max-h-48 rounded-lg" />
                 ) : m.attachment_type?.startsWith("audio/") ? (
                   <audio src={m.attachment_url} controls className="max-w-full" />
                 ) : (
@@ -141,13 +141,13 @@ export const MessageItem = memo(function MessageItem({
         )}
 
         {myRx.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
+          <div className="mt-1.5 flex flex-wrap gap-1">
             {myRx.map(([emoji, list]) => {
               const mine = list.some((r) => r.user_id === userId);
               return (
                 <button key={emoji} onClick={() => onReact(m, emoji)}
-                  className={`text-xs rounded-full border px-1.5 py-0.5 flex items-center gap-1 transition-all ${
-                    mine ? "bg-primary/15 border-primary/30 text-primary shadow-sm" : "bg-accent/30 border-border/60 text-muted-foreground hover:bg-accent/60"
+                  className={`text-xs rounded-full border px-1.5 py-0.5 flex items-center gap-1 transition-all touch-manipulation ${
+                    mine ? "bg-primary/15 border-primary/30 text-primary shadow-sm" : "bg-accent/30 border-border/50 text-muted-foreground hover:bg-accent/60 hover:border-border/70"
                   }`}>
                   <span>{emoji}</span><span className="text-[10px] font-medium">{list.length}</span>
                 </button>
@@ -159,27 +159,27 @@ export const MessageItem = memo(function MessageItem({
 
       {/* Hover actions — Discord-style toolbar */}
       {!isTemp && (
-        <div className="absolute -top-2 right-2 hidden group-hover:flex items-center gap-0.5 rounded-lg border border-border/60 bg-card shadow-md px-1 py-0.5 z-10">
+        <div className="absolute -top-2.5 right-2 hidden group-hover:flex items-center gap-0.5 rounded-lg border border-border/50 bg-card/95 backdrop-blur-md shadow-md px-1 py-0.5 z-10">
           <Popover>
             <PopoverTrigger asChild>
-              <button className="p-1 hover:text-foreground text-muted-foreground/50 transition-colors rounded hover:bg-accent"><Smile className="h-4 w-4" /></button>
+              <button className="p-1.5 hover:text-foreground text-muted-foreground/50 transition-colors rounded hover:bg-accent/60 touch-manipulation"><Smile className="h-4 w-4" /></button>
             </PopoverTrigger>
-            <PopoverContent className="p-1 w-auto" side="top" align="start">
-              <div className="flex gap-0.5">
+            <PopoverContent className="p-1.5 w-auto" side="top" align="start">
+              <div className="flex gap-0.5 flex-wrap max-w-[200px]">
                 {EMOJIS.map((e) => (
-                  <button key={e} onClick={() => onReact(m, e)} className="text-lg hover:bg-accent rounded p-1.5 sm:p-1 transition-colors">{e}</button>
+                  <button key={e} onClick={() => onReact(m, e)} className="text-lg hover:bg-accent rounded p-1.5 sm:p-1 transition-colors touch-manipulation">{e}</button>
                 ))}
               </div>
             </PopoverContent>
           </Popover>
-          <button onClick={() => setReplyTo(m)} title="Responder" className="p-1 hover:text-foreground text-muted-foreground/50 transition-colors rounded hover:bg-accent">
+          <button onClick={() => setReplyTo(m)} title="Responder" className="p-1.5 hover:text-foreground text-muted-foreground/50 transition-colors rounded hover:bg-accent/60 touch-manipulation">
             <CornerUpLeft className="h-4 w-4" />
           </button>
-          <button onClick={() => setEditing(m)} title="Editar" className="p-1 hover:text-foreground text-muted-foreground/50 transition-colors rounded hover:bg-accent">
+          <button onClick={() => setEditing(m)} title="Editar" className="p-1.5 hover:text-foreground text-muted-foreground/50 transition-colors rounded hover:bg-accent/60 touch-manipulation">
             <Pencil className="h-4 w-4" />
           </button>
           {m.author_id === userId && (
-            <button onClick={() => onDelete(m)} title="Apagar" className="p-1 text-destructive/70 hover:text-destructive transition-colors rounded hover:bg-destructive/10">
+            <button onClick={() => onDelete(m)} title="Apagar" className="p-1.5 text-destructive/70 hover:text-destructive transition-colors rounded hover:bg-destructive/10 touch-manipulation">
               <Trash2 className="h-4 w-4" />
             </button>
           )}

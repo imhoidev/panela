@@ -23,12 +23,12 @@ export function ResponsiveDialog({
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
         {trigger && <DrawerTrigger asChild>{trigger}</DrawerTrigger>}
-        <DrawerContent className={className}>
-          <DrawerHeader className="text-left">
-            {title && <DrawerTitle>{title}</DrawerTitle>}
+        <DrawerContent className={`border-t border-border/50 bg-background/95 backdrop-blur-xl ${className ?? ""}`}>
+          <DrawerHeader className="text-left border-b border-border/30 pb-3">
+            {title && <DrawerTitle className="text-base">{title}</DrawerTitle>}
             <DrawerDescription className="sr-only">{description || title || "Diálogo"}</DrawerDescription>
           </DrawerHeader>
-          <div className={`px-4 pb-6 ${contentClassName ?? ""}`}>{children}</div>
+          <div className={`px-4 pb-8 max-h-[70dvh] overflow-y-auto ${contentClassName ?? ""}`}>{children}</div>
         </DrawerContent>
       </Drawer>
     );
@@ -37,7 +37,7 @@ export function ResponsiveDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
-      <DialogContent className={className}>
+      <DialogContent className={`bg-background/95 backdrop-blur-xl border-border/50 ${className ?? ""}`}>
         <DialogHeader>
           {title && <DialogTitle>{title}</DialogTitle>}
           <DialogDescription className="sr-only">{description || title || "Diálogo"}</DialogDescription>
