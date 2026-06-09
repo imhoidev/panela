@@ -72,12 +72,13 @@ function DMLayout() {
       setConversations(mapped.map((c: any) => {
         const names = (c.others ?? []).map((p: any) => m.get(p.user_id)?.display_name || m.get(p.user_id)?.username || "Usuário");
         const title = names.length === 0 ? "Conversação" : names.length === 1 ? names[0] : `${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2}` : ""}`;
+        const otherProfile = c.others[0] ? { ...c.others[0], ...(m.get(c.others[0]?.user_id) ?? {}) } : null;
         return {
           ...c,
           title,
           preview: c.last_message_preview || "Nenhuma mensagem ainda",
           participantsProfiles: c.participants.map((p: any) => m.get(p.user_id) ?? null),
-          other: c.others[0] ?? null,
+          other: otherProfile,
         };
       }));
     } else {
@@ -103,7 +104,7 @@ function DMLayout() {
     const ids = [...new Set(participants.map((p: any) => p.user_id))];
     if (ids.length) {
       const { data: profs } = await supabase.from("profiles")
-        .select("id,username,display_name,avatar_url").in("id", ids);
+        .select("id,username,display_name,avatar_url,status,status_text").in("id", ids);
       if (profs) profs.forEach((prof: any) => setProfiles((prev) => new Map(prev).set(prof.id, prof)));
     }
     const names = otherParticipants.map((p: any) => {
@@ -111,6 +112,7 @@ function DMLayout() {
       return prof?.display_name || prof?.username || "Usuário";
     });
     const title = names.length === 0 ? "Conversação" : names.length === 1 ? names[0] : `${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2}` : ""}`;
+    const otherProfile = otherParticipants[0] ? { ...otherParticipants[0], ...(profiles.get(otherParticipants[0]?.user_id) ?? {}) } : null;
     const newConv = {
       ...conv,
       participants,
@@ -119,7 +121,7 @@ function DMLayout() {
       title,
       preview: conv.last_message_preview || "Nenhuma mensagem ainda",
       participantsProfiles: participants.map((p: any) => profiles.get(p.user_id) ?? null),
-      other: otherParticipants[0] ?? null,
+      other: otherProfile,
     };
     setConversations((prev) => {
       if (prev.some((c) => c.id === convId)) return prev;
@@ -197,8 +199,8 @@ function DMLayout() {
           const avatars = (c.participantsProfiles ?? []).filter((p: any) => p?.id !== user.id).slice(0, 3);
           return (
             <Link key={c.id} to="/app/dms/$conversationId" params={{ conversationId: c.id }}
-              className={`flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors ${
-                active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
+              className={`flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm transition-colors ${
+                active ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm" : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
               }`}>
               <div className="relative shrink-0">
                 <div className="relative h-10 w-10">
@@ -249,9 +251,17 @@ function DMLayout() {
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground/40" /></div>
         ) : filtered.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-8">
-            {search ? "Nenhuma conversa encontrada" : "Nenhuma conversa ainda"}
-          </p>
+          <div className="text-center py-12 px-4">
+            <div className="h-12 w-12 rounded-2xl bg-muted/30 grid place-items-center mx-auto mb-3">
+              <MessageSquare className="h-5 w-5 text-muted-foreground/40" />
+            </div>
+            <p className="text-xs font-medium text-muted-foreground/70">
+              {search ? "Nenhuma conversa encontrada" : "Nenhuma conversa ainda"}
+            </p>
+            <p className="text-[10px] text-muted-foreground/40 mt-1">
+              {search ? "Tente outro termo de busca" : "Inicie uma conversa pelo perfil de um usuário"}
+            </p>
+          </div>
         ) : null}
       </div>
     </div>

@@ -423,7 +423,7 @@ function DMChat() {
         </div>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-3 space-y-1 scroll-smooth">
+      <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-3 space-y-1 scroll-smooth bg-gradient-to-b from-transparent via-background/50 to-background/30">
         {hasMore && <div ref={sentinelRef} className="h-3" />}
         {loadingMore && (
           <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground/40" /></div>
@@ -570,9 +570,9 @@ function DMChat() {
         </button>
       )}
 
-      <form onSubmit={send} className="p-2 sm:p-3 border-t border-border bg-card/40 pb-[max(0.5rem,env(safe-area-inset-bottom))] shrink-0">
+      <form onSubmit={send} className="p-2 sm:p-3 border-t border-border/50 bg-card/40 backdrop-blur-md pb-[max(0.5rem,env(safe-area-inset-bottom))] shrink-0">
         {replyTo && (
-          <div className="mb-1.5 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent/50 border border-border text-xs">
+          <div className="mb-1.5 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent/50 backdrop-blur-sm border border-border/50 text-xs">
             <CornerUpLeft className="h-3 w-3 shrink-0 text-muted-foreground/60" />
             <Avatar className="h-5 w-5"><AvatarImage src={authorProfile(replyTo.author_id)?.avatar_url} /><AvatarFallback className="text-[8px]">{(authorProfile(replyTo.author_id)?.username || "?")[0]?.toUpperCase()}</AvatarFallback></Avatar>
             <span className="truncate text-muted-foreground/70">{replyTo.content}</span>
@@ -581,7 +581,7 @@ function DMChat() {
             </button>
           </div>
         )}
-        <div className="flex items-center gap-1.5 bg-background rounded-xl border border-border px-1.5 sm:px-2 py-1 sm:py-1.5 shadow-sm focus-within:border-primary/40 transition-all">
+        <div className="flex items-center gap-1.5 bg-background/90 backdrop-blur-xl rounded-xl border border-border/50 px-1.5 sm:px-2 py-1 sm:py-1.5 shadow-sm focus-within:border-primary/40 transition-all">
           <input type="file" ref={fileRef} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f, conversationId); e.target.value = ""; }} />
           <button type="button" onClick={() => fileRef.current?.click()} className="text-muted-foreground/50 hover:text-foreground p-1.5 shrink-0 transition-colors">
             <Paperclip className="h-5 w-5" />
