@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -125,7 +125,7 @@ export function MemberList({
                 </p>
                 <span className="text-[10px] text-muted-foreground/40 font-mono ml-auto">{grp.members.length}</span>
               </div>
-              <div className="space-y-px">
+              <div className="space-y-px" style={{ contentVisibility: "auto" }}>
                 {grp.members.map((m) => <MemberRow key={m.user_id} member={m} status={grp.key} />)}
               </div>
             </div>
@@ -136,7 +136,7 @@ export function MemberList({
   );
 }
 
-function MemberRow({ member, status }: { member: MemberWithProfile; status: string }) {
+const MemberRow = memo(function MemberRow({ member, status }: { member: MemberWithProfile; status: string }) {
   const p = member.profile;
   const dot = STATUS_META[status]?.dot || STATUS_META.offline.dot;
 
@@ -171,4 +171,4 @@ function MemberRow({ member, status }: { member: MemberWithProfile; status: stri
       </div>
     </Link>
   );
-}
+});

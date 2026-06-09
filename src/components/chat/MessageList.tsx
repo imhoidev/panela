@@ -1,0 +1,157 @@
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { MessageItem } from "./MessageItem";
+import { useChatContext } from "./ChatContext";
+import type { ChatMessage } from "@/hooks/useChat";
+
+type Reaction = { id: string; message_id: string; emoji: string; user_id: string };
+
+type Props = {
+  messages: ChatMessage[];
+  tempMessages: ChatMessage[];
+  reactions: Reaction[];
+  isLoading: boolean;
+  hasMore: boolean;
+  fetchMore: () => void;
+  isRules?: boolean;
+  isForum?: boolean;
+  isAnnouncement?: boolean;
+  channelName: string;
+  channelDescription?: string | null;
+  onReact: (msg: ChatMessage, emoji: string) => void;
+  onDelete: (msg: ChatMessage) => void;
+  onSaveEdit: () => void;
+};
+
+function getDateLabel(date: string) {
+  const d = new Date(date);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return "Hoje";
+  const yest = new Date(now);
+  yest.setDate(yest.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return "Ontem";
+  const weekAgo = new Date(now);
+  weekAgo.setDate(weekAgo.getDate() - 6);
+  if (d >= weekAgo) return d.toLocaleDateString("pt-BR", { weekday: "long" });
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+export function MessageList({
+  messages, tempMessages, reactions, isLoading, hasMore, fetchMore,
+  isRules, isForum, channelName, channelDescription,
+  onReact, onDelete, onSaveEdit,
+}: Props) {
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const { roleCache, userId, editingId, editText, setEditing, setEditText, cancelEdit } = useChatContext();
+
+  const allMessages = useMemo(() => {
+    if (tempMessages.length > 0) return [...messages, ...tempMessages];
+    return messages;
+  }, [messages, tempMessages]);
+
+  const items = useMemo(() => {
+    if (isRules) return [];
+    if (allMessages.length === 0) return [];
+    return allMessages.map((m, i) => {
+      const prev = allMessages[i - 1];
+      const showDateSep = !prev || new Date(m.created_at).toDateString() !== new Date(prev.created_at).toDateString();
+      const sameAuthor = prev && prev.author_id === m.author_id && !m.reply_to
+        && (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60_000);
+      const replied = m.reply_to ? allMessages.find((x) => x.id === m.reply_to) ?? null : null;
+      return { message: m, sameAuthor, replied, showDateSep, key: m.id };
+    });
+  }, [allMessages, isRules]);
+
+  const handleScrollToBottom = useCallback(() => {
+    virtuosoRef.current?.scrollToIndex({ index: items.length - 1, behavior: "smooth" });
+    setShowScrollBtn(false);
+  }, [items.length]);
+
+  const handleLoadMore = useCallback(() => {
+    if (hasMore && !isLoading) fetchMore();
+  }, [hasMore, isLoading, fetchMore]);
+
+  if (isRules) return null;
+
+  if (isLoading && items.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+          <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+          <span className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-center text-muted-foreground px-6">
+        <p className="font-semibold text-foreground/80">Bem-vindo a <span className="text-primary">#{channelName}</span></p>
+        <p className="text-sm mt-1">{isAnnouncement ? "Anuncios importantes serao publicados aqui." : "Esse e o comeco do canal."}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 relative min-h-0">
+      <Virtuoso
+        ref={virtuosoRef}
+        className="h-full"
+        data={items}
+        followOutput={atBottom ? "smooth" : false}
+        atBottomStateChange={(bottom) => { setAtBottom(bottom); setShowScrollBtn(!bottom); }}
+        startReached={handleLoadMore}
+        itemContent={(index, item) => {
+          const { message, sameAuthor, replied, showDateSep } = item;
+          return (
+            <div>
+              {showDateSep && (
+                <div className="flex items-center gap-3 my-4 px-5">
+                  <div className="flex-1 h-px bg-border/40" />
+                  <span className="text-[11px] font-semibold text-muted-foreground/50 uppercase tracking-wider shrink-0">
+                    {getDateLabel(message.created_at)}
+                  </span>
+                  <div className="flex-1 h-px bg-border/40" />
+                </div>
+              )}
+              <div className="px-2 sm:px-5">
+                <MessageItem
+                  message={message}
+                  sameAuthor={sameAuthor}
+                  replied={replied}
+                  reactions={reactions}
+                  isTemp={message.status === "sending"}
+                  onReact={onReact}
+                  onDelete={onDelete}
+                  onSaveEdit={onSaveEdit}
+                />
+              </div>
+            </div>
+          );
+        }}
+        components={{
+          Header: hasMore ? () => (
+            <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground/60">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="h-1.5 w-1.5 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
+          ) : undefined,
+        }}
+      />
+
+      {showScrollBtn && (
+        <button onClick={handleScrollToBottom}
+          className="absolute bottom-4 right-6 h-10 w-10 rounded-full bg-primary shadow-lg shadow-primary/30 grid place-items-center hover:bg-primary/90 transition-all z-10">
+          <svg className="h-5 w-5 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
