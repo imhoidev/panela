@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ReportDialog } from "@/components/ModPanel";
 import { useChatContext } from "./ChatContext";
+import { MediaAttachment } from "@/components/MediaLightbox";
 import {
   CornerUpLeft, Smile, Pencil, Trash2, MessageSquare,
   Check, X, Paperclip
@@ -124,18 +125,28 @@ export const MessageItem = memo(function MessageItem({
             )}
             {m.edited_at && <span className="text-[10px] text-muted-foreground/30 ml-1">(editado)</span>}
             {m.attachment_url && (
-              <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"
-                className="mt-1.5 inline-flex items-center gap-2.5 rounded-lg border border-border/50 bg-accent/15 px-3 py-2 text-sm hover:bg-accent/30 transition-colors">
-                {m.attachment_type?.startsWith("image/") ? (
-                  <img src={m.attachment_url} alt="attachment" className="max-h-48 rounded-lg object-contain shadow-sm" />
-                ) : m.attachment_type?.startsWith("video/") ? (
-                  <video src={m.attachment_url} controls className="max-h-48 rounded-lg" />
-                ) : m.attachment_type?.startsWith("audio/") ? (
-                  <audio src={m.attachment_url} controls className="max-w-full" />
-                ) : (
-                  <><Paperclip className="h-4 w-4 text-muted-foreground" /><span className="truncate text-muted-foreground">{m.attachment_url.split("/").pop()}</span></>
-                )}
-              </a>
+              <MediaAttachment url={m.attachment_url} type={m.attachment_type}>
+                <div className="mt-1.5 inline-flex items-center gap-2.5 rounded-lg border border-border/50 bg-accent/15 px-3 py-2 text-sm hover:bg-accent/30 transition-colors cursor-pointer">
+                  {m.attachment_type?.startsWith("image/") ? (
+                    <img src={m.attachment_url} alt="attachment" className="max-h-48 rounded-lg object-contain shadow-sm" />
+                  ) : m.attachment_type?.startsWith("video/") ? (
+                    <>
+                      <div className="relative">
+                        <video src={m.attachment_url} className="max-h-48 rounded-lg object-contain" />
+                        <div className="absolute inset-0 grid place-items-center">
+                          <div className="h-12 w-12 rounded-full bg-black/50 grid place-items-center">
+                            <span className="text-white text-2xl ml-0.5">▶</span>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : m.attachment_type?.startsWith("audio/") ? (
+                    <audio src={m.attachment_url} controls className="max-w-full" onClick={(e) => e.stopPropagation()} />
+                  ) : (
+                    <><Paperclip className="h-4 w-4 text-muted-foreground" /><span className="truncate text-muted-foreground">{m.attachment_url.split("/").pop()}</span></>
+                  )}
+                </div>
+              </MediaAttachment>
             )}
           </div>
         )}

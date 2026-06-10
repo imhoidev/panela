@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UsernameBadge } from "@/components/UsernameBadge";
 import { Button } from "@/components/ui/button";
 import { useRealtimeSocket } from "@/hooks/useRealtime";
+import { MediaAttachment } from "@/components/MediaLightbox";
 import { SendHorizontal, Paperclip, X, Trash2, CornerUpLeft, Loader2, ArrowDown, RefreshCcw, Slash, ShieldOff, Bell } from "lucide-react";
 import { toast } from "sonner";
 
@@ -494,16 +495,24 @@ function DMChat() {
                     {m.edited_at && <span className="text-[10px] opacity-60">(editado)</span>}
                     {m.attachment_url && (
                       <div className="mt-1.5">
-                        {m.attachment_type?.startsWith("image/") ? (
-                          <img src={m.attachment_url} alt="attachment" className="max-h-48 rounded-lg object-contain" />
-                        ) : m.attachment_type?.startsWith("video/") ? (
-                          <video src={m.attachment_url} controls className="max-h-48 rounded-lg" />
-                        ) : (
-                          <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs underline opacity-80 hover:opacity-100">
-                            <Paperclip className="h-3 w-3" />{m.attachment_url.split("/").pop()}
-                          </a>
-                        )}
+                        <MediaAttachment url={m.attachment_url} type={m.attachment_type}>
+                          {m.attachment_type?.startsWith("image/") ? (
+                            <img src={m.attachment_url} alt="attachment" className="max-h-48 rounded-lg object-contain cursor-pointer" />
+                          ) : m.attachment_type?.startsWith("video/") ? (
+                            <div className="relative cursor-pointer">
+                              <video src={m.attachment_url} className="max-h-48 rounded-lg object-contain" />
+                              <div className="absolute inset-0 grid place-items-center">
+                                <div className="h-10 w-10 rounded-full bg-black/50 grid place-items-center">
+                                  <span className="text-white text-xl ml-0.5">▶</span>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-1.5 text-xs underline opacity-80 hover:opacity-100 cursor-pointer">
+                              <Paperclip className="h-3 w-3" />{m.attachment_url.split("/").pop()}
+                            </div>
+                          )}
+                        </MediaAttachment>
                       </div>
                     )}
                   </div>
