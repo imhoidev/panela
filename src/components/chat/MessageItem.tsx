@@ -12,7 +12,7 @@ import { useChatContext } from "./ChatContext";
 import { MediaAttachment } from "@/components/MediaLightbox";
 import {
   CornerUpLeft, Smile, Pencil, Trash2, MessageSquare,
-  Check, X, Paperclip
+  Check, X, Paperclip, Pin,
 } from "lucide-react";
 import type { ChatMessage } from "@/hooks/useChat";
 
@@ -28,6 +28,7 @@ type Props = {
   onReact: (msg: ChatMessage, emoji: string) => void;
   onDelete: (msg: ChatMessage) => void;
   onSaveEdit: () => void;
+  onTogglePin?: (msg: ChatMessage) => void;
 };
 
 function relativeTime(date: string) {
@@ -53,7 +54,7 @@ function reactionsGrouped(all: Reaction[], msgId: string): Array<[string, Reacti
 }
 
 export const MessageItem = memo(function MessageItem({
-  message: m, sameAuthor, replied, reactions, isTemp, onReact, onDelete, onSaveEdit,
+  message: m, sameAuthor, replied, reactions, isTemp, onReact, onDelete, onSaveEdit, onTogglePin,
 }: Props) {
   const { userId, roleCache, editingId, editText, setEditing, setEditText, cancelEdit, setReplyTo } = useChatContext();
   const myRx = reactionsGrouped(reactions, m.id);
@@ -63,7 +64,7 @@ export const MessageItem = memo(function MessageItem({
   const isEditing = editingId === m.id;
 
   return (
-    <div className={`group relative flex gap-2.5 px-2 py-0.5 rounded-lg hover:bg-accent/10 transition-colors ${sameAuthor ? "pl-[3.25rem]" : "pt-1.5"} ${isTemp ? "opacity-60" : ""}`}>
+    <div className={`group relative flex gap-2.5 px-2 py-0.5 rounded-lg hover:bg-accent/10 transition-colors ${sameAuthor ? "pl-[3.25rem]" : "pt-1.5"} ${isTemp ? "opacity-60" : ""} ${m.is_pinned ? "bg-amber-500/5 border-l-2 border-amber-500/40" : ""}`}>
       {!sameAuthor ? (
         <Link to="/app/u/$slug" params={{ slug: m.author_id }}
           className="h-9 w-9 mt-0.5 shrink-0 rounded-full overflow-hidden ring-2 ring-transparent hover:ring-primary/40 transition-all shadow-sm">
@@ -81,6 +82,13 @@ export const MessageItem = memo(function MessageItem({
       )}
 
       <div className="min-w-0 flex-1 -mt-0.5">
+        {m.is_pinned && (
+          <div className="flex items-center gap-1 text-[11px] text-amber-400/90 font-medium mb-1">
+            <Pin className="h-3 w-3 fill-amber-400/30" />
+            <span>Mensagem fixada</span>
+          </div>
+        )}
+
         {replied && (
           <div className="text-xs text-muted-foreground/60 flex items-center gap-1 mb-0.5 truncate border-l-2 border-primary/30 pl-2 hover:border-primary/50 transition-colors">
             <CornerUpLeft className="h-3 w-3 shrink-0" />
@@ -186,6 +194,9 @@ export const MessageItem = memo(function MessageItem({
           <button onClick={() => setReplyTo(m)} title="Responder" className="p-1.5 hover:text-foreground text-muted-foreground/50 transition-colors rounded hover:bg-accent/60 touch-manipulation">
             <CornerUpLeft className="h-4 w-4" />
           </button>
+          <button onClick={() => onTogglePin?.(m)} title={m.is_pinned ? "Desfixar" : "Fixar"} className={`p-1.5 transition-colors rounded hover:bg-accent/60 touch-manipulation ${m.is_pinned ? "text-amber-400" : "hover:text-foreground text-muted-foreground/50"}`}>
+            <Pin className="h-4 w-4" />
+          </button>
           <button onClick={() => setEditing(m)} title="Editar" className="p-1.5 hover:text-foreground text-muted-foreground/50 transition-colors rounded hover:bg-accent/60 touch-manipulation">
             <Pencil className="h-4 w-4" />
           </button>
@@ -200,3 +211,4 @@ export const MessageItem = memo(function MessageItem({
     </div>
   );
 });
+

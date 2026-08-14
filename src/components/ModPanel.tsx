@@ -10,7 +10,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Gavel, AlertTriangle, Search, VolumeX, Volume2, ShieldCheck, Ban } from "lucide-react";
-import { useServerMembers, useServerBans, useServerMutes, useBanMember, useUnbanMember, useMuteMember, useUnmuteMember } from "@/hooks/servers";
+import { useServerMembers, useServerBans, useServerMutes, useBanMember, useUnbanMember, useMuteMember, useUnmuteMember, useServerAuditLogs } from "@/hooks/servers";
+import { FileText } from "lucide-react";
 
 export function ReportDialog({ messageId, channelId }: { messageId: string; channelId?: string }) {
   const [reason, setReason] = useState("spam");
@@ -50,12 +51,14 @@ export function ReportDialog({ messageId, channelId }: { messageId: string; chan
 
 export function ModeracaoDialog({ serverId, canManage }: { serverId: string; canManage: boolean }) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"membros" | "banidos">("membros");
+  const [tab, setTab] = useState<"membros" | "banidos" | "logs">("membros");
   const [search, setSearch] = useState("");
 
   const { data: members = [], isLoading: membersLoading } = useServerMembers(serverId);
   const { data: bans = [], isLoading: bansLoading } = useServerBans(serverId);
   const { data: mutes = [], isLoading: mutesLoading } = useServerMutes(serverId);
+  const { data: auditLogs = [], isLoading: logsLoading } = useServerAuditLogs(serverId);
+
   const banMutation = useBanMember(serverId);
   const unbanMutation = useUnbanMember(serverId);
   const muteMutation = useMuteMember(serverId);
@@ -83,17 +86,21 @@ export function ModeracaoDialog({ serverId, canManage }: { serverId: string; can
 
   return (
     <ResponsiveDialog open={open} onOpenChange={setOpen}
-      title="Moderação"
+      title="Moderação & Auditoria"
       trigger={<Button variant="ghost" size="sm" disabled={!canManage} className="text-destructive"><Gavel className="h-4 w-4 mr-1" />Mod.</Button>}>
-      <div className="space-y-3 min-h-[300px]">
-        <div className="flex gap-1">
+      <div className="space-y-3 min-h-[340px]">
+        <div className="flex gap-1 bg-muted/20 p-1 rounded-lg">
           <button onClick={() => setTab("membros")}
-            className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${tab === "membros" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${tab === "membros" ? "bg-accent text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
             Membros
           </button>
           <button onClick={() => setTab("banidos")}
-            className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${tab === "banidos" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-            Banidos
+            className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${tab === "banidos" ? "bg-accent text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+            Banidos ({bans.length})
+          </button>
+          <button onClick={() => setTab("logs")}
+            className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${tab === "logs" ? "bg-accent text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+            Logs de Auditoria
           </button>
         </div>
 
@@ -211,6 +218,41 @@ export function ModeracaoDialog({ serverId, canManage }: { serverId: string; can
                       </div>
                     );
                   })}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
+        )}
+
+        {tab === "logs" && (
+          <div className="space-y-2">
+            {logsLoading ? (
+              <div className="space-y-1">{[1,2,3].map((i) => <Skeleton key={i} className="h-11 w-full rounded-lg" />)}</div>
+            ) : auditLogs.length === 0 ? (
+              <div className="flex flex-col items-center py-8 text-muted-foreground/50">
+                <FileText className="h-8 w-8 mb-2 opacity-30" />
+                <p className="text-xs">Nenhum evento registrado ainda.</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-[300px] -mx-1 px-1">
+                <div className="space-y-1.5">
+                  {auditLogs.map((log: any) => (
+                    <div key={log.id} className="p-2.5 rounded-lg border border-border/50 bg-card/40 text-xs space-y-1">
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span className="font-semibold text-primary/80 uppercase tracking-wider text-[10px]">{log.action}</span>
+                        <span className="text-[10px]">{new Date(log.created_at).toLocaleString("pt-BR")}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-foreground/80">
+                        <span>Mod: <strong>{log.mod_profile?.display_name || log.mod_profile?.username || "Sistema"}</strong></span>
+                        {log.target_profile && (
+                          <span>→ Alvo: <strong>{log.target_profile?.display_name || log.target_profile?.username}</strong></span>
+                        )}
+                      </div>
+                      {log.reason && (
+                        <p className="text-[11px] text-muted-foreground/70 italic">"{log.reason}"</p>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </ScrollArea>
             )}

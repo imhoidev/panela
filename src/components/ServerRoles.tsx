@@ -19,33 +19,39 @@ type ServerRole = {
 
 const PERM_CATEGORIES = [
   {
-    label: "Gerais",
+    label: "Administração & Estrutura",
     perms: [
-      { key: "manage_channels", label: "Gerenciar canais" },
-      { key: "manage_roles", label: "Gerenciar cargos" },
+      { key: "ADMINISTRATE", label: "Administrar comunidade" },
+      { key: "MANAGE_CHANNELS", label: "Gerenciar canais" },
+      { key: "MANAGE_CATEGORIES", label: "Gerenciar categorias" },
+      { key: "MANAGE_ROLES", label: "Gerenciar cargos" },
+      { key: "CREATE_INVITES", label: "Criar convites" },
     ],
   },
   {
-    label: "Mensagens",
+    label: "Moderação & Membros",
     perms: [
-      { key: "manage_messages", label: "Gerenciar mensagens" },
-      { key: "mention_everyone", label: "Mencionar @everyone" },
-      { key: "attach_files", label: "Anexar arquivos" },
-      { key: "create_threads", label: "Criar tópicos" },
+      { key: "MANAGE_MEMBERS", label: "Gerenciar membros" },
+      { key: "KICK_MEMBERS", label: "Expulsar membros" },
+      { key: "BAN_MEMBERS", label: "Banir membros" },
+      { key: "MUTE_MEMBERS", label: "Silenciar membros" },
     ],
   },
   {
-    label: "Moderação",
+    label: "Mensagens & Chat",
     perms: [
-      { key: "kick_members", label: "Expulsar membros" },
-      { key: "ban_members", label: "Banir membros" },
+      { key: "SEND_MESSAGES", label: "Enviar mensagens" },
+      { key: "MANAGE_MESSAGES", label: "Gerenciar mensagens" },
+      { key: "MENTION_EVERYONE", label: "Mencionar todos (@everyone)" },
+      { key: "ATTACH_FILES", label: "Anexar arquivos" },
     ],
   },
   {
-    label: "Voz",
+    label: "Voz, Vídeo & Tela",
     perms: [
-      { key: "voice_mute", label: "Silenciar membros" },
-      { key: "voice_deafen", label: "Ensurdecer membros" },
+      { key: "USE_VOICE", label: "Usar canal de voz" },
+      { key: "USE_CAMERA", label: "Usar câmera" },
+      { key: "SHARE_SCREEN", label: "Compartilhar tela" },
     ],
   },
 ];
@@ -166,9 +172,10 @@ export function ServerRoles({ serverId, canManage }: { serverId: string; canMana
                           <label key={perm.key} className="flex items-center gap-2 text-xs py-0.5">
                             <Switch checked={local.permissions?.[perm.key] || false} disabled={!canManage}
                               onCheckedChange={(v) => {
-                                setLocalRoles((prev) => (prev ?? roles).map((x) => x.id === r.id ? { ...x, permissions: { ...x.permissions, [perm.key]: v } } : x));
-                              }}
-                              onMouseUp={() => save({ ...local, permissions: { ...local.permissions, [perm.key]: !local.permissions?.[perm.key] } })} />
+                                const newPerms = { ...(local.permissions || {}), [perm.key]: v };
+                                setLocalRoles((prev) => (prev ?? roles).map((x) => x.id === r.id ? { ...x, permissions: newPerms } : x));
+                                save({ ...local, permissions: newPerms });
+                              }} />
                             <span className="cursor-pointer">{perm.label}</span>
                           </label>
                         ))}

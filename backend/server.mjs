@@ -367,6 +367,9 @@ function parseMultipart(body, boundary) {
   return parts;
 }
 
+const MAX_VOICE_CAPACITY = Number(process.env.MAX_VOICE_CAPACITY) || 15;
+const voiceRoomOccupancy = new Map(); // roomName -> Map<userId, socketId>
+
 const server = http.createServer(handleRequest);
 
 async function handleLiveKitToken(request) {
@@ -380,6 +383,13 @@ async function handleLiveKitToken(request) {
     if (userErr || !userData.user) return json({ error: "Sessão inválida" }, 401);
     const body = (await request.json().catch(() => ({})));
     if (!body.room || !/^[a-zA-Z0-9_:-]{1,128}$/.test(body.room)) return json({ error: "room inválido" }, 400);
+
+    // Impõe o limite inicial de 15 participantes por canal de voz
+    const roomUsers = voiceRoomOccupancy.get(body.room);
+    if (roomUsers && roomUsers.size >= MAX_VOICE_CAPACITY && !roomUsers.has(userData.user.id)) {
+      return json({ error: `Este canal de voz atingiu o limite de ${MAX_VOICE_CAPACITY} participantes simultâneos.` }, 403);
+    }
+
     if (body.channelId) {
       const { data: ch } = await lkSb.from("channels").select("id, type").eq("id", body.channelId).maybeSingle();
       if (!ch || ch.type !== "voice") return json({ error: "Canal de voz não encontrado" }, 403);
@@ -391,7 +401,7 @@ async function handleLiveKitToken(request) {
     const grants = { video: { room: body.room, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true }, name: display, metadata: JSON.stringify({ avatar_url: profile?.avatar_url ?? null }) };
     const secret = new TextEncoder().encode(LIVEKIT_API_SECRET);
     const jwt = await new SignJWT(grants).setProtectedHeader({ alg: "HS256" }).setIssuer(LIVEKIT_API_KEY).setSubject(identity).setJti(crypto.randomUUID()).setIssuedAt(now).setExpirationTime(now + 60 * 60 * 6).setNotBefore(now - 5).sign(secret);
-    return json({ token: jwt, url: LIVEKIT_URL, identity, name: display });
+    return json({ token: jwt, url: LIVEKIT_URL, identity, name: display, maxCapacity: MAX_VOICE_CAPACITY });
   } catch (e) {
     console.error("livekit-token error", e);
     return json({ error: e?.message ?? "erro interno" }, 500);
@@ -406,6 +416,7 @@ const io = new IOServer(server, {
 const presence = new Map();        // userId -> { sockets: Set<socketId>, status, serverId }
 const userStatus = new Map();      // userId -> "online" | "idle" | "dnd" | "offline"
 const roomPresence = new Map();    // serverId -> Map<userId, status>
+
 
 io.on("connection", async (socket) => {
   const auth = socket.handshake.auth ?? {};
@@ -505,8 +516,48 @@ io.on("connection", async (socket) => {
     socket.emit("presence:bulk", statuses);
   });
 
+  // === VOICE ROOM EVENTS & MODERATION ===
+  socket.on("voice:join", ({ room }) => {
+    if (!room || typeof room !== "string") return;
+    socket.join(`vroom:${room}`);
+    socket.data.voiceRoom = room;
+    if (!voiceRoomOccupancy.has(room)) voiceRoomOccupancy.set(room, new Map());
+    const occupants = voiceRoomOccupancy.get(room);
+    occupants.set(userId, socket.id);
+    io.to(`vroom:${room}`).emit("voice:occupancy", { room, count: occupants.size, max: MAX_VOICE_CAPACITY });
+  });
+
+  socket.on("voice:leave", ({ room }) => {
+    const vroom = room || socket.data.voiceRoom;
+    if (!vroom || !voiceRoomOccupancy.has(vroom)) return;
+    socket.leave(`vroom:${vroom}`);
+    socket.data.voiceRoom = null;
+    const occupants = voiceRoomOccupancy.get(vroom);
+    occupants.delete(userId);
+    if (occupants.size === 0) voiceRoomOccupancy.delete(vroom);
+    io.to(`vroom:${vroom}`).emit("voice:occupancy", { room: vroom, count: occupants ? occupants.size : 0, max: MAX_VOICE_CAPACITY });
+  });
+
+  socket.on("voice:mute_user", ({ room, targetUserId }) => {
+    if (!room || !targetUserId) return;
+    io.to(`vroom:${room}`).emit("voice:user_muted", { targetUserId, modId: userId });
+  });
+
+  socket.on("voice:kick_user", ({ room, targetUserId }) => {
+    if (!room || !targetUserId) return;
+    io.to(`vroom:${room}`).emit("voice:user_kicked", { targetUserId, modId: userId });
+  });
+
   socket.on("disconnect", () => {
     const uid = socket.data.userId;
+    if (socket.data.voiceRoom && voiceRoomOccupancy.has(socket.data.voiceRoom)) {
+      const vroom = socket.data.voiceRoom;
+      const occupants = voiceRoomOccupancy.get(vroom);
+      occupants.delete(uid);
+      if (occupants.size === 0) voiceRoomOccupancy.delete(vroom);
+      io.to(`vroom:${vroom}`).emit("voice:occupancy", { room: vroom, count: occupants ? occupants.size : 0, max: MAX_VOICE_CAPACITY });
+    }
+
     entry.sockets.delete(socket.id);
     if (entry.sockets.size === 0) {
       if (entry.serverId && roomPresence.has(entry.serverId)) {

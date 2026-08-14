@@ -28,7 +28,11 @@ function ChatInner({
   const { user, profile } = useAuth();
   const qc = useQueryClient();
   const { socket } = useRealtimeSocket();
-  const { messages, tempMessages, isLoading, hasMore, fetchMore, sendMessage, editMessage, deleteMessage } = useChat(channelId, user?.id);
+  const { messages, tempMessages, isLoading, hasMore, fetchMore, sendMessage, editMessage, deleteMessage, togglePinMessage } = useChat(channelId, user?.id);
+
+  async function handleTogglePin(m: ChatMessage) {
+    togglePinMessage.mutate({ id: m.id, isPinned: !m.is_pinned });
+  }
   const cache = useChatCache(channelId);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [typing, setTyping] = useState<Record<string, { name: string; t: number }>>({});
@@ -262,6 +266,7 @@ function ChatInner({
         onReact={handleReact}
         onDelete={handleDelete}
         onSaveEdit={handleSaveEdit}
+        onTogglePin={handleTogglePin}
       />
       <div>
         {Object.values(typing).length > 0 && (

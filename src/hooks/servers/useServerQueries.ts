@@ -256,3 +256,34 @@ export function useChannelTopicHistory(channelId: string) {
     staleTime: 30_000,
   });
 }
+
+export function useServerAuditLogs(serverId: string) {
+  return useQuery({
+    queryKey: ["auditLogs", serverId],
+    queryFn: async () => {
+      const { data: logs } = await supabase
+        .from("moderation_logs")
+        .select("*")
+        .eq("server_id", serverId)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      const list = logs ?? [];
+      if (!list.length) return [];
+      const userIds = [...new Set(list.flatMap((l: any) => [l.target_user_id, l.mod_user_id]).filter(Boolean))];
+      if (!userIds.length) return list;
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, username, display_name, avatar_url")
+        .in("id", userIds);
+      const profMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p]));
+      return list.map((l: any) => ({
+        ...l,
+        target_profile: profMap[l.target_user_id] || null,
+        mod_profile: profMap[l.mod_user_id] || null,
+      }));
+    },
+    enabled: !!serverId,
+    staleTime: 15_000,
+  });
+}
+

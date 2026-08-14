@@ -13,6 +13,9 @@ export type ChatMessage = {
   thread_root: string | null;
   edited_at: string | null;
   created_at: string;
+  is_pinned?: boolean;
+  pinned_at?: string | null;
+  pinned_by?: string | null;
   author?: {
     username: string;
     display_name: string | null;
@@ -205,6 +208,35 @@ export function useChat(channelId: string, userId?: string) {
     onSettled: () => qc.invalidateQueries({ queryKey: qk }),
   });
 
+  const togglePinMessage = useMutation({
+    mutationFn: async ({ id, isPinned }: { id: string; isPinned: boolean }) => {
+      const uid = userId || (await supabase.auth.getUser()).data.user?.id;
+      const { error } = await supabase
+        .from("messages")
+        .update({
+          is_pinned: isPinned,
+          pinned_at: isPinned ? new Date().toISOString() : null,
+          pinned_by: isPinned ? uid : null,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onMutate: async ({ id, isPinned }) => {
+      await qc.cancelQueries({ queryKey: qk });
+      const prev = qc.getQueryData<{ pages: Page[] }>(qk);
+      updateInCache(qc, qk, id, { is_pinned: isPinned });
+      return { prev };
+    },
+    onSuccess: (_, { isPinned }) => {
+      toast.success(isPinned ? "Mensagem fixada!" : "Mensagem desfixada!");
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+      toast.error((_err as any)?.message || "Erro ao fixar/desfixar mensagem");
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: qk }),
+  });
+
   return {
     messages: (messagesQuery.data?.pages.slice().reverse().flatMap((p) => p.messages) ?? [])
       .filter((m) => !m._temp),
@@ -218,6 +250,7 @@ export function useChat(channelId: string, userId?: string) {
     sendMessage,
     editMessage,
     deleteMessage,
+    togglePinMessage,
   };
 }
 

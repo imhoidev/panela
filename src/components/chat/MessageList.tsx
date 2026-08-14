@@ -22,6 +22,7 @@ type Props = {
   onReact: (msg: ChatMessage, emoji: string) => void;
   onDelete: (msg: ChatMessage) => void;
   onSaveEdit: () => void;
+  onTogglePin?: (msg: ChatMessage) => void;
 };
 
 function getDateLabel(date: string) {
@@ -71,8 +72,8 @@ function EmptyState({ channelName, isAnnouncement }: { channelName: string; isAn
 
 export function MessageList({
   messages, tempMessages, reactions, isLoading, hasMore, fetchMore,
-  isRules, isForum, channelName, channelDescription,
-  onReact, onDelete, onSaveEdit,
+  isRules, isForum, isAnnouncement, channelName, channelDescription,
+  onReact, onDelete, onSaveEdit, onTogglePin,
 }: Props) {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [atBottom, setAtBottom] = useState(true);
@@ -146,6 +147,7 @@ export function MessageList({
                   onReact={onReact}
                   onDelete={onDelete}
                   onSaveEdit={onSaveEdit}
+                  onTogglePin={onTogglePin}
                 />
               </div>
             </div>
