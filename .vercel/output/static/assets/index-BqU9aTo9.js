@@ -1,1 +1,0 @@
-import{w as e}from"./index-YLZwWPjp.js";function a(t){const u=e.useRef(t);return e.useEffect(()=>{u.current=t}),e.useMemo(()=>(...r)=>u.current?.(...r),[])}var f=globalThis?.document?e.useLayoutEffect:()=>{};export{f as a,a as u};

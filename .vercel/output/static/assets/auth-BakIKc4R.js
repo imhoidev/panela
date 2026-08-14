@@ -1,0 +1,1 @@
+import{r as e,O as r}from"./index-da9ma7qg.js";import{a as t}from"./AuthGate-rn7ayxZn.js";import"./useLocation-DikhaLG5.js";import"./PanelaLogo-DJrFgTsR.js";const n=()=>e.jsx(t,{children:e.jsx("div",{className:"min-h-screen grid place-items-center px-4 py-10 bg-background",children:e.jsx(r,{})})});export{n as component};
