@@ -106,7 +106,7 @@ function ServerLayout() {
   // Auto-fix: if owner but not a member
   useEffect(() => {
     if (server && !memberLevel && server.owner_id === user?.id) {
-      supabase.from("server_members").insert({ server_id: serverId, user_id: user.id, level: 99 }).then(() => {
+      supabase.from("server_members").upsert({ server_id: serverId, user_id: user.id, level: 99 }, { onConflict: "server_id, user_id", ignoreDuplicates: true }).then(() => {
         refetchServer();
       });
     }

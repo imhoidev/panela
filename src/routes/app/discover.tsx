@@ -41,9 +41,9 @@ function Discover() {
   async function join(id: string) {
     if (!user) return;
     setJoining(id);
-    const { error } = await supabase.from("server_members").insert({ server_id: id, user_id: user.id, level: 1 });
+    const { error } = await supabase.from("server_members").upsert({ server_id: id, user_id: user.id, level: 1 }, { onConflict: "server_id, user_id", ignoreDuplicates: true });
     setJoining(null);
-    if (error) return toast.error(error.message);
+    if (error && (error as any).code !== "23505") return toast.error(error.message);
     toast.success("Entrou na panela!");
     router.navigate({ to: "/app/servers/$serverId", params: { serverId: id } });
   }
