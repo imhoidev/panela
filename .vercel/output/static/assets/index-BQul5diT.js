@@ -1,0 +1,1 @@
+import{N as o,V as a,w as s,r as n}from"./index-YLZwWPjp.js";import{F as u}from"./AuthGate-BdL6JlzH.js";import"./useLocation-BqhbULXQ.js";import"./PanelaLogo-Dan_URAn.js";function f(){const{ready:r,user:e}=o(),t=a();return s.useEffect(()=>{r&&t.navigate({to:e?"/app":"/auth/login",replace:!0})},[r,e]),n.jsx(u,{label:"Abrindo a PANELA…"})}export{f as component};
