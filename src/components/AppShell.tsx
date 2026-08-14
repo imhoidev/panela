@@ -7,7 +7,6 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescri
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { StatusPicker } from "./PresenceStatus";
-import { SearchPalette } from "./SearchPalette";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Home, Hash, MessageSquare, Compass, Users, Settings, Crown, LogOut, Sparkles, Plus, Menu, Search,
@@ -75,7 +74,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="h-[100dvh] w-screen overflow-hidden flex bg-background text-foreground">
-      <SearchPalette />
 
       {/* Server Rail — desktop only */}
       <ServersRail myServers={myServers} activeServerId={activeServerId} loc={loc} loading={loading} />
@@ -115,8 +113,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             <PanelaLogo size={20} />
             <span className="text-xs text-muted-foreground/60 font-medium"></span>
           </Link>
-          <Button size="icon" variant="ghost" className="h-10 w-10 touch-manipulation" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}>
-            <Search className="h-5 w-5" />
+          <Button size="icon" variant="ghost" className="h-10 w-10 touch-manipulation" asChild>
+            <Link to="/app/discover"><Search className="h-5 w-5" /></Link>
           </Button>
         </header>
 
@@ -133,7 +131,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 const active = loc.pathname === it.to || (it.to !== "/app" && loc.pathname.startsWith(it.to));
                 return (
                   <li key={it.to}>
-                    <Link to={it.to} className={`flex flex-col items-center justify-center h-full text-[10px] gap-0.5 transition-colors touch-manipulation ${active ? "text-primary font-medium" : "text-muted-foreground hover:text-foreground"}`}>
+                    <Link to={it.to} className={`flex flex-col items-center justify-center h-full text-[10px] gap-0.5 transition-colors touch-manipulation ${active ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}>
                       <it.icon className={`h-5 w-5 ${active ? "fill-primary/10" : ""}`} />
                       <span>{it.label}</span>
                     </Link>
