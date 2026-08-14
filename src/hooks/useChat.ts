@@ -97,6 +97,7 @@ export function useChat(channelId: string, userId?: string) {
 
   const messagesQuery = useInfiniteQuery<Page, Error>({
     queryKey: qk,
+    initialPageParam: null as string | null,
     queryFn: async ({ pageParam }) => {
       const builder = supabase
         .from("messages")
@@ -132,6 +133,7 @@ export function useChat(channelId: string, userId?: string) {
   const sendMessage = useMutation({
     mutationFn: async (payload: SendPayload) => {
       const uid = userId || (await supabase.auth.getUser()).data.user?.id;
+      if (!uid) throw new Error("Usuário não autenticado");
       const { data, error } = await supabase.from("messages").insert({
         channel_id: channelId,
         author_id: uid,

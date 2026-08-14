@@ -36,7 +36,7 @@ function ChannelView() {
   const isRules = channel.type === "rules";
   const isAnnouncement = channel.type === "announcement";
   const isForum = channel.type === "forum";
-  const canPost = ctx?.canManage || ctx?.memberLevel >= 60 || (!isRules && !isAnnouncement);
+  const canPost = (ctx?.canManage ?? false) || ((ctx?.memberLevel ?? 0) >= 60) || (!isRules && !isAnnouncement);
   const onlineCount = Array.from((ctx?.presence ?? new Map()).values()).filter((s) => s !== "offline").length;
 
   function channelMeta(type: string) {

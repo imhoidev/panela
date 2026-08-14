@@ -96,9 +96,9 @@ function Settings() {
 
       {/* Presence Status */}
       <Card className="p-5 space-y-2">
-        <h2 className="font-semibold flex items-center gap-2"><StatusDot status={profile?.status || "online"} size="lg" /> Presença</h2>
+        <h2 className="font-semibold flex items-center gap-2"><StatusDot status={(profile as any)?.status || "online"} size="lg" /> Presença</h2>
         <p className="text-sm text-muted-foreground">Sua disponibilidade atual aparece para todos nos servidores.</p>
-        <StatusPicker currentStatus={profile?.status} />
+        <StatusPicker currentStatus={(profile as any)?.status} />
       </Card>
 
       {/* Account */}
@@ -147,7 +147,7 @@ function Settings() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Enviar com</Label>
-            <Select value={sendMode} onValueChange={setSendMode}>
+            <Select value={sendMode} onValueChange={(v) => setSendMode(v as any)}>
               <SelectTrigger className="w-full h-9 text-sm">
                 <SelectValue />
               </SelectTrigger>
@@ -202,7 +202,7 @@ function Settings() {
         <h2 className="font-semibold flex items-center gap-2"><Info className="h-4 w-4 text-primary" /> Sobre o PANELA</h2>
         <p className="text-sm text-muted-foreground">PANELA é uma plataforma social de comunidades com sabor de fórum 2008 e velocidade de 2026. Versão 3.0 — com DMs, temas, cargos, eventos e muito mais.</p>
         <div className="text-xs text-muted-foreground/60 pt-1">
-          <profile className="italic">Feito com 🧑‍🍳 e ☕ em São Paulo</profile>
+          <p className="italic">Feito com 🧑‍🍳 e ☕ em São Paulo</p>
           <p>Desenvolvido por <a href="https://instagram.com/breyky" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Breyky</a></p>
         </div>
       </Card>
@@ -222,7 +222,7 @@ async function subscribePush(): Promise<PushSubscription | null> {
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(import.meta.env.VITE_VAPID_PUBLIC_KEY || ""),
+    applicationServerKey: urlBase64ToUint8Array(import.meta.env.VITE_VAPID_PUBLIC_KEY || "") as unknown as BufferSource,
   });
   return sub;
 }

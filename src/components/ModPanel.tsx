@@ -19,7 +19,7 @@ export function ReportDialog({ messageId, channelId }: { messageId: string; chan
 
   async function report() {
     const { error } = await supabase.from("moderation_reports").insert({
-      message_id: messageId, channel_id: channelId, reason, reported_by: (await supabase.auth.getSession()).data.session?.user.id,
+      message_id: messageId, channel_id: channelId, reason, reported_by: (await supabase.auth.getSession()).data.session?.user.id || "",
     });
     if (error) toast.error(error.message); else { toast.success("Reportado à moderação"); setOpen(false); }
   }

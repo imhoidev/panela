@@ -28,7 +28,7 @@ export function StickerPicker({ onSelect, serverId }: { onSelect: (url: string) 
           {stickers.map((s) => (
             <button key={s.id} onClick={() => onSelect(s.url)}
               className="rounded overflow-hidden hover:ring-2 ring-primary transition-all p-1">
-              <img src={s.image_url} alt={s.name} className="w-full aspect-square object-contain" />
+              <img src={(s as any).image_url || s.url} alt={s.name} className="w-full aspect-square object-contain" />
             </button>
           ))}
           {!stickers.length && <p className="col-span-4 text-xs text-muted-foreground text-center py-4">Nenhum sticker</p>}

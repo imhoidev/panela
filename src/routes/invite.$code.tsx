@@ -18,11 +18,11 @@ function InviteAccept() {
 
   useEffect(() => {
     if (!user) { setStatus("error"); setMsg("Faça login para aceitar o convite"); return; }
-    supabase.rpc("accept_invite", { invite_code: code }).then(({ data, error }) => {
+    (supabase.rpc as any)("accept_invite", { invite_code: code }).then(({ data, error }: any) => {
       if (error) { setStatus("error"); setMsg(error.message); return; }
       setStatus("success");
       setMsg("Você entrou no servidor!");
-      setTimeout(() => navigate({ to: "/app/servers/$serverId", params: { serverId: data } }), 1500);
+      setTimeout(() => navigate({ to: "/app/servers/$serverId", params: { serverId: String(data) } }), 1500);
     });
   }, [code, user]);
 

@@ -17,7 +17,7 @@ export const Route = createFileRoute("/app/plans")({
   component: PlansPage,
 });
 
-type Sub = { id: string; status: string; plan: string; created_at: string; notes: string | null };
+type Sub = { id: string; status: string; plan: string; created_at: string; ends_at?: string | null; notes: string | null };
 
 function PlansPage() {
   const { user, profile, refreshProfile } = useAuth();

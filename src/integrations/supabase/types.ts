@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -16,7 +14,9 @@ export type Database = {
     Tables: {
       channels: {
         Row: {
+          category: string | null
           created_at: string
+          description: string | null
           expires_at: string | null
           id: string
           min_age: number | null
@@ -25,10 +25,13 @@ export type Database = {
           position: number | null
           server_id: string
           topic: string | null
+          topic_updated_at: string | null
           type: Database["public"]["Enums"]["channel_type"]
         }
         Insert: {
+          category?: string | null
           created_at?: string
+          description?: string | null
           expires_at?: string | null
           id?: string
           min_age?: number | null
@@ -37,10 +40,13 @@ export type Database = {
           position?: number | null
           server_id: string
           topic?: string | null
+          topic_updated_at?: string | null
           type?: Database["public"]["Enums"]["channel_type"]
         }
         Update: {
+          category?: string | null
           created_at?: string
+          description?: string | null
           expires_at?: string | null
           id?: string
           min_age?: number | null
@@ -49,6 +55,7 @@ export type Database = {
           position?: number | null
           server_id?: string
           topic?: string | null
+          topic_updated_at?: string | null
           type?: Database["public"]["Enums"]["channel_type"]
         }
         Relationships: [
@@ -57,6 +64,108 @@ export type Database = {
             columns: ["server_id"]
             isOneToOne: false
             referencedRelation: "servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      server_categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          position: number | null
+          server_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          position?: number | null
+          server_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number | null
+          server_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "server_categories_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          attachment_type: string | null
+          attachment_url: string | null
+          author_id: string
+          channel_id: string
+          content: string | null
+          created_at: string
+          edited_at: string | null
+          id: string
+          is_pinned: boolean | null
+          pinned_at: string | null
+          pinned_by: string | null
+          reply_to: string | null
+          thread_root: string | null
+        }
+        Insert: {
+          attachment_type?: string | null
+          attachment_url?: string | null
+          author_id: string
+          channel_id: string
+          content?: string | null
+          created_at?: string
+          edited_at?: string | null
+          id?: string
+          is_pinned?: boolean | null
+          pinned_at?: string | null
+          pinned_by?: string | null
+          reply_to?: string | null
+          thread_root?: string | null
+        }
+        Update: {
+          attachment_type?: string | null
+          attachment_url?: string | null
+          author_id?: string
+          channel_id?: string
+          content?: string | null
+          created_at?: string
+          edited_at?: string | null
+          id?: string
+          is_pinned?: boolean | null
+          pinned_at?: string | null
+          pinned_by?: string | null
+          reply_to?: string | null
+          thread_root?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_fkey"
+            columns: ["reply_to"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_thread_root_fkey"
+            columns: ["thread_root"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
         ]
@@ -134,61 +243,6 @@ export type Database = {
           },
         ]
       }
-      messages: {
-        Row: {
-          author_id: string
-          channel_id: string
-          content: string | null
-          created_at: string
-          edited_at: string | null
-          id: string
-          reply_to: string | null
-          thread_root: string | null
-        }
-        Insert: {
-          author_id: string
-          channel_id: string
-          content?: string | null
-          created_at?: string
-          edited_at?: string | null
-          id?: string
-          reply_to?: string | null
-          thread_root?: string | null
-        }
-        Update: {
-          author_id?: string
-          channel_id?: string
-          content?: string | null
-          created_at?: string
-          edited_at?: string | null
-          id?: string
-          reply_to?: string | null
-          thread_root?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "messages_channel_id_fkey"
-            columns: ["channel_id"]
-            isOneToOne: false
-            referencedRelation: "channels"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_reply_to_fkey"
-            columns: ["reply_to"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_thread_root_fkey"
-            columns: ["thread_root"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
           age_verified: boolean | null
@@ -207,6 +261,7 @@ export type Database = {
           name_colors: Json | null
           name_effect: string | null
           social_links: Json | null
+          status: string | null
           status_emoji: string | null
           status_text: string | null
           updated_at: string
@@ -229,6 +284,7 @@ export type Database = {
           name_colors?: Json | null
           name_effect?: string | null
           social_links?: Json | null
+          status?: string | null
           status_emoji?: string | null
           status_text?: string | null
           updated_at?: string
@@ -251,10 +307,251 @@ export type Database = {
           name_colors?: Json | null
           name_effect?: string | null
           social_links?: Json | null
+          status?: string | null
           status_emoji?: string | null
           status_text?: string | null
           updated_at?: string
           username?: string
+        }
+        Relationships: []
+      }
+      dm_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          last_message_at: string | null
+          last_message_preview: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+        }
+        Relationships: []
+      }
+      dm_participants: {
+        Row: {
+          conversation_id: string
+          id: string
+          joined_at: string
+          last_read_at: string | null
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          id?: string
+          joined_at?: string
+          last_read_at?: string | null
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          id?: string
+          joined_at?: string
+          last_read_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      dm_messages: {
+        Row: {
+          attachment_type: string | null
+          attachment_url: string | null
+          author_id: string
+          content: string | null
+          conversation_id: string
+          created_at: string
+          edited_at: string | null
+          id: string
+          reply_to: string | null
+        }
+        Insert: {
+          attachment_type?: string | null
+          attachment_url?: string | null
+          author_id: string
+          content?: string | null
+          conversation_id: string
+          created_at?: string
+          edited_at?: string | null
+          id?: string
+          reply_to?: string | null
+        }
+        Update: {
+          attachment_type?: string | null
+          attachment_url?: string | null
+          author_id?: string
+          content?: string | null
+          conversation_id?: string
+          created_at?: string
+          edited_at?: string | null
+          id?: string
+          reply_to?: string | null
+        }
+        Relationships: []
+      }
+      server_bans: {
+        Row: {
+          banned_by: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          reason: string | null
+          server_id: string
+          user_id: string
+        }
+        Insert: {
+          banned_by: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          reason?: string | null
+          server_id: string
+          user_id: string
+        }
+        Update: {
+          banned_by?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          reason?: string | null
+          server_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      server_mutes: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          muted_by: string
+          reason: string | null
+          server_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          muted_by: string
+          reason?: string | null
+          server_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          muted_by?: string
+          reason?: string | null
+          server_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      invites: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          id: string
+          max_uses: number | null
+          server_id: string
+          use_count: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by: string
+          expires_at?: string | null
+          id?: string
+          max_uses?: number | null
+          server_id: string
+          use_count?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          id?: string
+          max_uses?: number | null
+          server_id?: string
+          use_count?: number
+        }
+        Relationships: []
+      }
+      moderation_logs: {
+        Row: {
+          action: string
+          created_at: string
+          duration_hours: number | null
+          id: string
+          mod_user_id: string | null
+          reason: string | null
+          server_id: string
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          duration_hours?: number | null
+          id?: string
+          mod_user_id?: string | null
+          reason?: string | null
+          server_id: string
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          duration_hours?: number | null
+          id?: string
+          mod_user_id?: string | null
+          reason?: string | null
+          server_id?: string
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
+      moderation_reports: {
+        Row: {
+          channel_id: string | null
+          created_at: string
+          id: string
+          message_id: string | null
+          reason: string
+          reported_by: string
+          reviewed_by: string | null
+          status: string | null
+        }
+        Insert: {
+          channel_id?: string | null
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          reason: string
+          reported_by: string
+          reviewed_by?: string | null
+          status?: string | null
+        }
+        Update: {
+          channel_id?: string | null
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          reason?: string
+          reported_by?: string
+          reviewed_by?: string | null
+          status?: string | null
         }
         Relationships: []
       }
@@ -603,6 +900,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_invite: {
+        Args: { invite_code: string }
+        Returns: string
+      }
       current_plan: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["subscription_plan"]

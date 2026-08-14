@@ -67,10 +67,10 @@ function ThreadView() {
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
-    if (!user || !text.trim() || sending) return;
+    if (!user || !text.trim() || sending || !root?.channel_id) return;
     setSending(true);
     const { error } = await supabase.from("messages").insert({
-      channel_id: root?.channel_id, author_id: user.id, content: text.trim(), thread_root: messageId,
+      channel_id: root.channel_id, author_id: user.id, content: text.trim(), thread_root: messageId,
     });
     setText(""); setSending(false);
     if (error) toast.error(error.message);
@@ -97,7 +97,7 @@ function ThreadView() {
           </Avatar>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
-              {root.author ? <UsernameBadge profile={root.author} /> : <span className="text-muted-foreground">…</span>}
+              {root.author ? <UsernameBadge profile={root.author as any} /> : <span className="text-muted-foreground">…</span>}
               <span className="text-[11px] text-muted-foreground">{new Date(root.created_at).toLocaleString("pt-BR")}</span>
             </div>
             {root.content && (
@@ -116,7 +116,7 @@ function ThreadView() {
             </Avatar>
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-2">
-                {m.author ? <UsernameBadge profile={m.author} /> : <span className="text-muted-foreground">…</span>}
+                {m.author ? <UsernameBadge profile={m.author as any} /> : <span className="text-muted-foreground">…</span>}
                 <span className="text-[11px] text-muted-foreground">{new Date(m.created_at).toLocaleString("pt-BR")}</span>
               </div>
               {m.content && (

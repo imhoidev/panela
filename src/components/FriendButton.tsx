@@ -14,10 +14,10 @@ export function FriendButton({ targetUserId }: { targetUserId: string }) {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("friends")
+    (supabase as any).from("friends")
       .select("status, user_id, friend_id")
       .or(`and(user_id.eq.${user.id},friend_id.eq.${targetUserId}),and(user_id.eq.${targetUserId},friend_id.eq.${user.id})`)
-      .then(({ data }) => {
+      .then(({ data }: any) => {
         if (!data?.length) return setStatus("none");
         const rel = data[0] as any;
         if (rel.status === "accepted") setStatus("accepted");
@@ -29,9 +29,10 @@ export function FriendButton({ targetUserId }: { targetUserId: string }) {
   async function startDM() {
     if (!user) return;
     // Use SECURITY DEFINER function to find existing shared conversation
-    const { data: shared } = await supabase.rpc("get_shared_dm_conversation", { other_user_id: targetUserId });
-    if (shared?.length) {
-      navigate({ to: "/app/dms/$conversationId", params: { conversationId: shared[0].conversation_id } });
+    const { data: shared } = await (supabase.rpc as any)("get_shared_dm_conversation", { other_user_id: targetUserId });
+    const sharedArr = (shared as any[]) ?? [];
+    if (sharedArr.length) {
+      navigate({ to: "/app/dms/$conversationId", params: { conversationId: sharedArr[0].conversation_id } });
       return;
     }
     // Pre-generate UUID so we don't need to SELECT after INSERT (avoids RLS chicken-and-egg)
@@ -48,7 +49,7 @@ export function FriendButton({ targetUserId }: { targetUserId: string }) {
   async function addFriend() {
     if (!user) return;
     setActionLoading(true);
-    const { error } = await supabase.from("friends").insert({
+    const { error } = await (supabase as any).from("friends").insert({
       user_id: user.id, friend_id: targetUserId,
     });
     setActionLoading(false);
@@ -58,11 +59,12 @@ export function FriendButton({ targetUserId }: { targetUserId: string }) {
   }
 
   async function acceptFriend() {
+    if (!user) return;
     setActionLoading(true);
-    const { error } = await supabase.from("friends")
+    const { error } = await (supabase as any).from("friends")
       .update({ status: "accepted" })
       .eq("user_id", targetUserId)
-      .eq("friend_id", user!.id);
+      .eq("friend_id", user.id);
     setActionLoading(false);
     if (error) return toast.error(error.message);
     setStatus("accepted");

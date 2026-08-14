@@ -23,7 +23,7 @@ export function InvitesDialog({ serverId, canManage }: { serverId: string; canMa
     const code = crypto.randomUUID().slice(0, 8);
     const expires = expiresH ? new Date(Date.now() + Number(expiresH) * 3600000).toISOString() : null;
     const { error } = await supabase.from("invites").insert({
-      server_id: serverId, code, created_by: (await supabase.auth.getSession()).data.session?.user.id,
+      server_id: serverId, code, created_by: (await supabase.auth.getSession()).data.session?.user.id || "",
       max_uses: maxUses ? Number(maxUses) : null, expires_at: expires,
     });
     if (error) toast.error(error.message); else { load(); setMaxUses(""); setExpiresH(""); }

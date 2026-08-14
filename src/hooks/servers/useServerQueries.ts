@@ -139,13 +139,13 @@ export function useServerXP(serverId: string, userId: string | undefined) {
     queryKey: ["serverXP", serverId, userId],
     queryFn: async () => {
       if (!userId) return { xp: 0, level: 0, nextXp: 10, progress: 0, nextLevel: 1 };
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("server_xp")
         .select("xp")
         .eq("server_id", serverId)
         .eq("user_id", userId)
         .maybeSingle();
-      const xp = data?.xp ?? 0;
+      const xp = (data as any)?.xp ?? 0;
       const level = Math.floor(Math.sqrt(xp / 10));
       const nextXp = (level + 1) ** 2 * 10;
       return {
@@ -165,12 +165,12 @@ export function useServerXPRewards(serverId: string) {
   return useQuery({
     queryKey: ["serverXPRewards", serverId],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("server_level_rewards")
         .select("*")
         .eq("server_id", serverId)
         .order("level_threshold", { ascending: true });
-      return data ?? [];
+      return (data as any[]) ?? [];
     },
     enabled: !!serverId,
     staleTime: 30_000,
@@ -182,13 +182,13 @@ export function useServerAchievements(serverId: string, userId: string | undefin
     queryKey: ["serverAchievements", serverId, userId],
     queryFn: async () => {
       if (!userId) return [];
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("server_achievements")
         .select("*")
         .eq("server_id", serverId)
         .eq("user_id", userId)
         .order("unlocked_at", { ascending: false });
-      return data ?? [];
+      return (data as any[]) ?? [];
     },
     enabled: !!serverId && !!userId,
     staleTime: 30_000,
@@ -199,13 +199,13 @@ export function useServerLeaderboard(serverId: string) {
   return useQuery({
     queryKey: ["serverLeaderboard", serverId],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("server_xp")
         .select("user_id, xp")
         .eq("server_id", serverId)
         .order("xp", { ascending: false })
         .limit(20);
-      const rows = data ?? [];
+      const rows = (data as any[]) ?? [];
       if (!rows.length) return [];
       const userIds = rows.map((row: any) => row.user_id);
       const { data: profiles } = await supabase
@@ -229,12 +229,12 @@ export function useServerBookmarks(userId: string | undefined) {
     queryKey: ["messageBookmarks", userId],
     queryFn: async () => {
       if (!userId) return [];
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("message_bookmarks")
         .select("*")
         .eq("user_id", userId)
         .order("created_at", { ascending: false });
-      return data ?? [];
+      return (data as any[]) ?? [];
     },
     enabled: !!userId,
     staleTime: 30_000,
@@ -245,7 +245,7 @@ export function useChannelTopicHistory(channelId: string) {
   return useQuery({
     queryKey: ["channelTopicHistory", channelId],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("channel_topic_history")
         .select("*")
         .eq("channel_id", channelId)

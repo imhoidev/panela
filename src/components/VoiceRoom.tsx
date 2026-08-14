@@ -121,7 +121,7 @@ function StageGrid() {
         const trackRef = screenTrack || camTrack;
 
         return (
-          <CardWrapper key={p.identity} participant={p} isScreen={hasScreen}>
+          <CardWrapper key={p.identity} participant={p} isScreen={Boolean(hasScreen)}>
             {showVideo && trackRef ? (
               <TrackRefContext.Provider value={trackRef}>
                 <ParticipantTile className={`h-full w-full ${hasScreen ? "[&_video]:object-contain" : "[&_video]:object-cover"}`} />

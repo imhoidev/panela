@@ -2,12 +2,12 @@
 
 > Plataforma social de comunidades, vibe retrô 2008 + clean 2026.
 
-## Stack (adaptada à infra Lovable)
+## Stack
 - **Frontend:** React 19 + Vite + TanStack Start (file-based routing) + TypeScript + Tailwind v4 + shadcn/ui + Radix + TanStack Query.
-- **Backend:** Lovable Cloud (Supabase gerenciado): Postgres + Auth + Storage + Realtime + Edge Functions (Deno).
-- **Auth:** Email/senha + Google (managed). Login com Discord não é suportado nativamente — pode ser adicionado depois via projeto Supabase próprio.
-- **Voz/vídeo (Fase 4):** LiveKit (free tier) para SFU escalável.
-- **Push (Fase 5):** Web Push (VAPID) + Service Worker + Supabase Realtime triggers.
+- **Backend:** Supabase (Postgres + Auth + Storage + Realtime + RLS) + Node.js Socket.io / API Server.
+- **Auth:** Email/senha + Google OAuth (Supabase Auth).
+- **Voz/vídeo:** LiveKit SFU (WebRTC).
+- **Push:** Web Push (VAPID) + Service Worker + Socket.io.
 
 ---
 

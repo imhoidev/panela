@@ -74,7 +74,7 @@ function DMChat() {
   const lastTypingSent = useRef(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const knownIds = useRef<Set<string>>(new Set());
-  const scrollTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const scrollTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const STATUS_DOT: Record<string, string> = {
     online: "bg-emerald-500", idle: "bg-yellow-500", dnd: "bg-red-500", invisible: "bg-muted-foreground/30", offline: "bg-muted-foreground/30",
@@ -88,8 +88,8 @@ function DMChat() {
     setLoading(true);
     const authors: string[] = [];
 
-    const { data: parts } = await supabase.rpc("get_dm_participants_single", { conv_id: conversationId });
-    const participants = parts ?? [];
+    const { data: parts } = await (supabase.rpc as any)("get_dm_participants_single", { conv_id: conversationId });
+    const participants = (parts as any[]) ?? [];
     setConversationParticipants(participants);
     const pIds = participants.map((p: any) => p.user_id);
     authors.push(...pIds);
@@ -308,7 +308,7 @@ function DMChat() {
     const el = scrollRef.current;
     if (!el) return;
     const onScroll = () => {
-      clearTimeout(scrollTimeout.current);
+      if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
       const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
       setShowScrollBtn(!atBottom && messages.length > 0);
       scrollTimeout.current = setTimeout(() => {}, 100);
@@ -353,7 +353,7 @@ function DMChat() {
     knownIds.current.delete(m.id);
     setMessages((prev) => prev.filter((x) => x.id !== m.id));
     if (socket) socket.emit("message:deleted", { conversationId, messageId: m.id });
-    await supabase.from("dm_messages").delete().eq("id", m.id);
+    await (supabase as any).from("dm_messages").delete().eq("id", m.id);
   }
 
   function authorProfile(authorId: string) {

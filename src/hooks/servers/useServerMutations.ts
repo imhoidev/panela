@@ -16,7 +16,7 @@ export function useUpdateServer(serverId: string) {
   const key = ["server", serverId];
   return useMutation({
     mutationFn: async (updates: Record<string, any>) => {
-      const { error } = await supabase.from("servers").update(updates).eq("id", serverId);
+      const { error } = await supabase.from("servers").update(updates as any).eq("id", serverId);
       if (error) throw error;
     },
     onMutate: async (updates) => {
@@ -60,7 +60,7 @@ export function useCreateChannel(serverId: string) {
   const key = ["channels", serverId];
   return useMutation({
     mutationFn: async (channel: { name: string; type: string; position: number; category?: string | null }) => {
-      const { data, error } = await supabase.from("channels").insert({ server_id: serverId, ...channel }).select().single();
+      const { data, error } = await supabase.from("channels").insert({ server_id: serverId, ...channel, type: channel.type as any } as any).select().single();
       if (error) throw error;
       return data;
     },
@@ -83,7 +83,7 @@ export function useUpdateChannel(serverId: string) {
   const key = ["channels", serverId];
   return useMutation({
     mutationFn: async ({ id, ...updates }: any) => {
-      const { error } = await supabase.from("channels").update(updates).eq("id", id);
+      const { error } = await supabase.from("channels").update(updates as any).eq("id", id);
       if (error) throw error;
     },
     onMutate: async ({ id, ...updates }) => {
@@ -189,7 +189,7 @@ export function useBanMember(serverId: string) {
       const expiresAt = hours ? new Date(Date.now() + Number(hours) * 3600000).toISOString() : null;
       const { data, error } = await supabase.from("server_bans").insert({
         server_id: serverId, user_id: userId, reason: reason || null,
-        banned_by: (await supabase.auth.getSession()).data.session?.user.id,
+        banned_by: (await supabase.auth.getSession()).data.session?.user.id || "",
         expires_at: expiresAt,
       }).select().single();
       if (error) throw error;
@@ -237,7 +237,7 @@ export function useMuteMember(serverId: string) {
       const expiresAt = hours ? new Date(Date.now() + Number(hours) * 3600000).toISOString() : null;
       const { data, error } = await supabase.from("server_mutes").insert({
         server_id: serverId, user_id: userId, reason: reason || null,
-        muted_by: (await supabase.auth.getSession()).data.session?.user.id,
+        muted_by: (await supabase.auth.getSession()).data.session?.user.id || "",
         expires_at: expiresAt,
       }).select().single();
       if (error) throw error;
@@ -331,7 +331,7 @@ export function useAddXPReward(serverId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (reward: { level_threshold: number; reward_type: "role" | "item" | "custom"; reward_value: string; message?: string | null }) => {
-      const { error } = await supabase.from("server_level_rewards").insert({ server_id: serverId, ...reward });
+      const { error } = await (supabase as any).from("server_level_rewards").insert({ server_id: serverId, ...reward });
       if (error) throw error;
     },
     onMutate: async (reward) => {
@@ -349,7 +349,7 @@ export function useRemoveXPReward(serverId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (rewardId: string) => {
-      const { error } = await supabase.from("server_level_rewards").delete().eq("id", rewardId).eq("server_id", serverId);
+      const { error } = await (supabase as any).from("server_level_rewards").delete().eq("id", rewardId).eq("server_id", serverId);
       if (error) throw error;
     },
     onMutate: async (rewardId) => {
@@ -368,7 +368,7 @@ export function useAwardAchievement(serverId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { userId: string; achievementKey: string; message?: string | null }) => {
-      const { error } = await supabase.rpc("award_server_achievement", {
+      const { error } = await (supabase.rpc as any)("award_server_achievement", {
         _server_id: serverId, _user_id: payload.userId,
         _achievement_key: payload.achievementKey, _message: payload.message ?? null,
       });
@@ -387,7 +387,7 @@ export function useToggleBookmark(userId: string | undefined) {
   return useMutation({
     mutationFn: async (payload: { message_id: string; note?: string | null }) => {
       if (!userId) throw new Error("Usuário não autenticado");
-      const { error } = await supabase.from("message_bookmarks").upsert(
+      const { error } = await (supabase as any).from("message_bookmarks").upsert(
         { user_id: userId, message_id: payload.message_id, note: payload.note ?? null },
         { onConflict: ["user_id", "message_id"] }
       );
@@ -402,7 +402,7 @@ export function useUpdateTopic(channelId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (topic: string) => {
-      const { error } = await supabase.rpc("update_channel_topic", { _channel_id: channelId, _topic: topic });
+      const { error } = await (supabase.rpc as any)("update_channel_topic", { _channel_id: channelId, _topic: topic });
       if (error) throw error;
     },
     onMutate: async (topic) => {

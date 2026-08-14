@@ -4,6 +4,7 @@ import { MessageItem } from "./MessageItem";
 import { useChatContext } from "./ChatContext";
 import type { ChatMessage } from "@/hooks/useChat";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Hash } from "lucide-react";
 
 type Reaction = { id: string; message_id: string; emoji: string; user_id: string };
 

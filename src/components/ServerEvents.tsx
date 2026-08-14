@@ -31,6 +31,7 @@ export function ServerEventsDialog({ serverId, canManage }: { serverId: string; 
     if (!newTitle.trim() || !newDate) return;
     const { error } = await supabase.from("server_events").insert({
       server_id: serverId, title: newTitle.trim(), description: newDesc.trim() || null, starts_at: newDate,
+      created_by: (await supabase.auth.getSession()).data.session?.user.id || "",
     });
     if (error) return toast.error(error.message);
     setNewTitle(""); setNewDesc(""); setNewDate("");

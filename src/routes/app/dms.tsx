@@ -43,9 +43,9 @@ function DMLayout() {
       .in("id", convIds)
       .order("last_message_at", { ascending: false, nullsFirst: false });
 
-    const { data: allParts } = await supabase.rpc("get_dm_participants", { conv_ids: convIds });
+    const { data: allParts } = await (supabase.rpc as any)("get_dm_participants", { conv_ids: convIds });
     const partsByConv = new Map<string, any[]>();
-    (allParts ?? []).forEach((p: any) => {
+    ((allParts as any[]) ?? []).forEach((p: any) => {
       const arr = partsByConv.get(p.conversation_id) ?? [];
       arr.push(p); partsByConv.set(p.conversation_id, arr);
     });
@@ -98,21 +98,21 @@ function DMLayout() {
     if (!user) return;
     const { data: conv } = await supabase.from("dm_conversations").select("*").eq("id", convId).single();
     if (!conv) return;
-    const { data: parts } = await supabase.rpc("get_dm_participants_single", { conv_id: convId });
-    const participants = parts ?? [];
+    const { data: parts } = await (supabase.rpc as any)("get_dm_participants_single", { conv_id: convId });
+    const participants = (parts as any[]) ?? [];
     const otherParticipants = participants.filter((p: any) => p.user_id !== user.id);
     const ids = [...new Set(participants.map((p: any) => p.user_id))];
     if (ids.length) {
       const { data: profs } = await supabase.from("profiles")
-        .select("id,username,display_name,avatar_url,status,status_text").in("id", ids);
+        .select("id,username,display_name,avatar_url,status,status_text").in("id", ids as string[]);
       if (profs) profs.forEach((prof: any) => setProfiles((prev) => new Map(prev).set(prof.id, prof)));
     }
-    const names = otherParticipants.map((p: any) => {
+    const names = (otherParticipants as any[]).map((p: any) => {
       const prof = profiles.get(p.user_id);
       return prof?.display_name || prof?.username || "Usuário";
     });
     const title = names.length === 0 ? "Conversação" : names.length === 1 ? names[0] : `${names.slice(0, 2).join(", ")}${names.length > 2 ? ` +${names.length - 2}` : ""}`;
-    const otherProfile = otherParticipants[0] ? { ...otherParticipants[0], ...(profiles.get(otherParticipants[0]?.user_id) ?? {}) } : null;
+    const otherProfile = (otherParticipants as any[])[0] ? { ...(otherParticipants as any[])[0], ...(profiles.get((otherParticipants as any[])[0]?.user_id) ?? {}) } : null;
     const newConv = {
       ...conv,
       participants,
@@ -196,7 +196,7 @@ function DMLayout() {
           const unread = hasUnread(c);
           const title = c.title || "Carregando...";
           const subtitle = c.isGroup ? `${c.participants?.length ?? 0} membros` : "Privado";
-          const avatars = (c.participantsProfiles ?? []).filter((p: any) => p?.id !== user.id).slice(0, 3);
+          const avatars = (c.participantsProfiles ?? []).filter((p: any) => p?.id !== user?.id).slice(0, 3);
           return (
             <Link key={c.id} to="/app/dms/$conversationId" params={{ conversationId: c.id }}
               className={`flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm transition-colors ${

@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { PanelaLogo } from "@/components/PanelaLogo";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -30,8 +29,8 @@ function Login() {
   }
 
   async function onGoogle() {
-    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + "/app" });
-    if (r.error) toast.error(String((r as any).error?.message ?? r.error));
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin + "/app" } });
+    if (error) toast.error(error.message);
   }
 
   return (

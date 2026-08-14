@@ -362,7 +362,7 @@ function PublicProfile() {
               const nextXp = (level + 1) ** 2 * 10;
               const progress = Math.min(entry.xp / nextXp, 1);
               return (
-                <Link key={sv?.id || Math.random()} to={sv ? "/app/servers/$serverId" : "#"} params={sv ? { serverId: sv.id } : undefined as any}
+                <Link key={sv?.id || Math.random()} to={sv ? "/app/servers/$serverId" : "/app/servers"} params={sv ? { serverId: sv.id } : undefined as any}
                   className={`flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-accent/20 transition-colors ${!sv ? "pointer-events-none" : ""}`}>
                   {sv?.icon_url ? (
                     <img src={sv.icon_url} alt="" className="h-8 w-8 rounded-lg object-cover shrink-0 ring-1 ring-border/10" />
@@ -477,7 +477,7 @@ function PublicProfile() {
                   const nextXp = (level + 1) ** 2 * 10;
                   const progress = Math.min(entry.xp / nextXp, 1);
                   return (
-                    <Link key={sv?.id || Math.random()} to={sv ? "/app/servers/$serverId" : "#"} params={sv ? { serverId: sv.id } : undefined as any}
+                    <Link key={sv?.id || Math.random()} to={sv ? "/app/servers/$serverId" : "/app/servers"} params={sv ? { serverId: sv.id } : undefined as any}
                       className={`flex items-center gap-2.5 rounded-lg hover:bg-accent/20 p-2 transition-colors ${!sv ? "pointer-events-none" : ""}`}>
                       {sv?.icon_url ? (
                         <img src={sv.icon_url} alt="" className="h-8 w-8 rounded-lg object-cover shrink-0" />

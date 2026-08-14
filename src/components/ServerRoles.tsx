@@ -14,7 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 type ServerRole = {
   id: string; name: string; level: number; color: string | null;
-  permissions: Record<string, boolean>; gif_tag_url: string | null; member_count?: number;
+  permissions: any; gif_tag_url: string | null; member_count?: number;
 };
 
 const PERM_CATEGORIES = [
@@ -57,7 +57,8 @@ const PERM_CATEGORIES = [
 ];
 
 export function ServerRoles({ serverId, canManage }: { serverId: string; canManage: boolean }) {
-  const { data: roles = [], isLoading } = useServerRoles(serverId);
+  const { data: rolesData = [], isLoading } = useServerRoles(serverId);
+  const roles = (rolesData as any[]) as ServerRole[];
   const qc = useQueryClient();
   const [localRoles, setLocalRoles] = useState<ServerRole[] | null>(null);
 
@@ -159,7 +160,7 @@ export function ServerRoles({ serverId, canManage }: { serverId: string; canMana
                 {local.gif_tag_url && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>Preview:</span>
-                    <img src={local.gif_tag_url} alt="" className="h-5 w-5 rounded object-cover" />
+                    <img src={local.gif_tag_url} alt="" className="h-5 w-5 object-contain" />
                   </div>
                 )}
 
@@ -170,9 +171,10 @@ export function ServerRoles({ serverId, canManage }: { serverId: string; canMana
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1">
                         {cat.perms.map((perm) => (
                           <label key={perm.key} className="flex items-center gap-2 text-xs py-0.5">
-                            <Switch checked={local.permissions?.[perm.key] || false} disabled={!canManage}
+                            <Switch checked={Boolean((local.permissions as any)?.[perm.key])} disabled={!canManage}
                               onCheckedChange={(v) => {
-                                const newPerms = { ...(local.permissions || {}), [perm.key]: v };
+                                const current = (local.permissions && typeof local.permissions === "object") ? (local.permissions as any) : {};
+                                const newPerms = { ...current, [perm.key]: v };
                                 setLocalRoles((prev) => (prev ?? roles).map((x) => x.id === r.id ? { ...x, permissions: newPerms } : x));
                                 save({ ...local, permissions: newPerms });
                               }} />
@@ -189,7 +191,9 @@ export function ServerRoles({ serverId, canManage }: { serverId: string; canMana
         </div>
       </ScrollArea>
       {canManage && (
-        <Button variant="outline" className="w-full" onClick={create}><Plus className="h-4 w-4 mr-1" />Novo cargo</Button>
+        <Button onClick={create} variant="outline" className="w-full h-9 text-xs gap-1.5">
+          <Plus className="h-3.5 w-3.5" /> Criar cargo
+        </Button>
       )}
     </div>
   );

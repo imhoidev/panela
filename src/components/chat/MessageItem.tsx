@@ -132,15 +132,15 @@ export const MessageItem = memo(function MessageItem({
               </div>
             )}
             {m.edited_at && <span className="text-[10px] text-muted-foreground/30 ml-1">(editado)</span>}
-            {m.attachment_url && (
-              <MediaAttachment url={m.attachment_url} type={m.attachment_type}>
+            {(m as any).attachment_url && (
+              <MediaAttachment url={(m as any).attachment_url} type={(m as any).attachment_type}>
                 <div className="mt-1.5 inline-flex items-center gap-2.5 rounded-lg border border-border/50 bg-accent/15 px-3 py-2 text-sm hover:bg-accent/30 transition-colors cursor-pointer">
-                  {m.attachment_type?.startsWith("image/") ? (
-                    <img src={m.attachment_url} alt="attachment" className="max-h-48 rounded-lg object-contain shadow-sm" />
-                  ) : m.attachment_type?.startsWith("video/") ? (
+                  {(m as any).attachment_type?.startsWith("image/") ? (
+                    <img src={(m as any).attachment_url} alt="attachment" className="max-h-48 rounded-lg object-contain shadow-sm" />
+                  ) : (m as any).attachment_type?.startsWith("video/") ? (
                     <>
                       <div className="relative">
-                        <video src={m.attachment_url} className="max-h-48 rounded-lg object-contain" />
+                        <video src={(m as any).attachment_url} className="max-h-48 rounded-lg object-contain" />
                         <div className="absolute inset-0 grid place-items-center">
                           <div className="h-12 w-12 rounded-full bg-black/50 grid place-items-center">
                             <span className="text-white text-2xl ml-0.5">▶</span>
@@ -148,10 +148,10 @@ export const MessageItem = memo(function MessageItem({
                         </div>
                       </div>
                     </>
-                  ) : m.attachment_type?.startsWith("audio/") ? (
-                    <audio src={m.attachment_url} controls className="max-w-full" onClick={(e) => e.stopPropagation()} />
+                  ) : (m as any).attachment_type?.startsWith("audio/") ? (
+                    <audio src={(m as any).attachment_url} controls className="max-w-full" onClick={(e) => e.stopPropagation()} />
                   ) : (
-                    <><Paperclip className="h-4 w-4 text-muted-foreground" /><span className="truncate text-muted-foreground">{m.attachment_url.split("/").pop()}</span></>
+                    <><Paperclip className="h-4 w-4 text-muted-foreground" /><span className="truncate text-muted-foreground">{(m as any).attachment_url.split("/").pop()}</span></>
                   )}
                 </div>
               </MediaAttachment>

@@ -33,7 +33,7 @@ export function MessageInput({
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { replyTo, cancelReply } = useChatContext();
   const [dragging, setDragging] = useState(false);
 
