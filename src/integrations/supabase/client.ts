@@ -21,17 +21,10 @@ function createSupabaseClient() {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      lock: typeof window !== 'undefined' && 'locks' in navigator
-        ? async (name: string, acquireTimeout: number, fn: () => Promise<any>) => {
-            try {
-              return await navigator.locks.request(name, { ifAvailable: true }, async (_lock) => {
-                return await fn();
-              });
-            } catch {
-              return await fn();
-            }
-          }
-        : undefined,
+      // Custom lock bypass to prevent browser Navigator LockManager acquisition failures
+      lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => {
+        return await fn();
+      },
     }
   });
 }
