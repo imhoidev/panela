@@ -36,23 +36,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    // Listener primeiro (síncrono dentro do callback) — recomenda Supabase.
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        // defer pra não rodar fetch dentro do callback
         setTimeout(() => loadProfileAndRoles(s.user.id), 0);
       } else {
         setProfile(null);
         setRoles([]);
       }
-    });
-    // Depois pega sessão atual
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      if (data.session?.user) loadProfileAndRoles(data.session.user.id);
       setReady(true);
     });
     return () => sub.subscription.unsubscribe();

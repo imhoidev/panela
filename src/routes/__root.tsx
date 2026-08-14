@@ -76,8 +76,19 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function ServiceWorkerRegister() {
   useEffect(() => {
-    if ("serviceWorker" in navigator && "PushManager" in window) {
-      navigator.serviceWorker.register("/sw.js").catch(console.error);
+    if (typeof window !== "undefined") {
+      const handlePreloadError = () => {
+        window.location.reload();
+      };
+      window.addEventListener("vite:preloadError", handlePreloadError);
+
+      if ("serviceWorker" in navigator && "PushManager" in window) {
+        navigator.serviceWorker.register("/sw.js").catch(console.error);
+      }
+
+      return () => {
+        window.removeEventListener("vite:preloadError", handlePreloadError);
+      };
     }
   }, []);
   return null;

@@ -72,7 +72,7 @@ function ServerLayout() {
 
   const { data: server, isLoading: serverLoading, refetch: refetchServer } = useServerDetails(serverId);
   const { data: channels = [], isLoading: channelsLoading } = useServerChannels(serverId);
-  const { data: memberLevel = 0 } = useMemberLevel(serverId, user?.id);
+  const { data: memberLevel = 0, isLoading: memberLevelLoading } = useMemberLevel(serverId, user?.id);
   const createChannel = useCreateChannel(serverId);
   const deleteChannelMut = useDeleteChannel(serverId);
   const updateChannel = useUpdateChannel(serverId);
@@ -103,14 +103,14 @@ function ServerLayout() {
     }
   }, [server?.id, channels.length, loc.pathname]);
 
-  // Auto-fix: if owner but not a member
+  // Auto-fix: if owner but not a member (executa apenas após carregar a query)
   useEffect(() => {
-    if (server && !memberLevel && server.owner_id === user?.id) {
+    if (!memberLevelLoading && server && memberLevel === 0 && server.owner_id === user?.id) {
       supabase.from("server_members").upsert({ server_id: serverId, user_id: user.id, level: 99 }, { onConflict: "server_id, user_id", ignoreDuplicates: true }).then(() => {
         refetchServer();
       });
     }
-  }, [server?.id, memberLevel]);
+  }, [server?.id, memberLevel, memberLevelLoading]);
 
   if (serverLoading || !server) return (
     <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-8 bg-gradient-to-b from-transparent to-card/10">
